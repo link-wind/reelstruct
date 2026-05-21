@@ -25,6 +25,7 @@ def save_sample_upload(file: UploadFile, *, sample_dir: Optional[Path] = None) -
         handle.write(file.file.read())
 
     duration = probe_video_duration(target_path) or 30.0
+    shot_count = detect_shot_count(target_path) or estimate_shot_count(duration)
     return SampleUploadResponse(
         sample_id=sample_id,
         filename=filename,
@@ -33,7 +34,7 @@ def save_sample_upload(file: UploadFile, *, sample_dir: Optional[Path] = None) -
         sample=SampleVideoInput(
             title=file.filename or filename,
             duration=round(duration, 1),
-            shot_count=estimate_shot_count(duration),
+            shot_count=shot_count,
             transcript_summary="已上传样例视频，第一版先基于时长和镜头节奏做结构拆解。",
         ),
     )
@@ -64,3 +65,28 @@ def probe_video_duration(path: Path) -> Optional[float]:
 
 def estimate_shot_count(duration: float) -> int:
     return max(1, round(duration / 3))
+
+
+def detect_shot_count(path: Path, *, threshold: float = 0.3) -> Optional[int]:
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-i",
+            str(path),
+            "-vf",
+            f"select='gt(scene,{threshold})',metadata=print:file=-",
+            "-an",
+            "-f",
+            "null",
+            "-",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    output = f"{result.stdout}\n{result.stderr}"
+    scene_cuts = output.count("lavfi.scene_score=")
+    if result.returncode != 0 and scene_cuts == 0:
+        return None
+    return max(1, scene_cuts + 1)

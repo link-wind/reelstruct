@@ -292,6 +292,7 @@ export default function ReelStructWorkspace() {
             <p>Duration: {sample.duration}s</p>
             <p>Shots: {sample.shot_count}</p>
             <p>Source: {sampleUpload?.public_url || 'default fixture input'}</p>
+            <p>Analysis: {sampleUpload ? 'scene detect' : 'default sample preset'}</p>
           </div>
         </div>
 

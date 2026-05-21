@@ -21,6 +21,20 @@ def test_upload_sample_video_returns_metadata():
     assert body["sample"]["shot_count"] >= 1
 
 
+def test_upload_sample_video_detects_scene_based_shot_count():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/samples/upload",
+        files={"file": ("scene.mp4", create_scene_change_video_bytes(), "video/mp4")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sample"]["duration"] >= 3
+    assert body["sample"]["shot_count"] >= 3
+
+
 def create_tiny_video_bytes() -> bytes:
     from pathlib import Path
     import subprocess
@@ -51,3 +65,64 @@ def create_tiny_video_bytes() -> bytes:
             capture_output=True,
         )
         return path.read_bytes()
+
+
+def create_scene_change_video_bytes() -> bytes:
+    from pathlib import Path
+    import subprocess
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        colors = ["red", "blue", "green"]
+        segment_paths: list[Path] = []
+        for color in colors:
+            segment_path = root / f"{color}.mp4"
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    f"color=c={color}:s=160x240:d=1",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "anullsrc=channel_layout=stereo:sample_rate=44100",
+                    "-shortest",
+                    "-c:v",
+                    "libx264",
+                    "-c:a",
+                    "aac",
+                    str(segment_path),
+                ],
+                check=True,
+                capture_output=True,
+            )
+            segment_paths.append(segment_path)
+
+        list_path = root / "list.txt"
+        list_path.write_text(
+            "".join(f"file '{path.as_posix()}'\n" for path in segment_paths),
+            encoding="utf-8",
+        )
+        output_path = root / "scene.mp4"
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(list_path),
+                "-c",
+                "copy",
+                str(output_path),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        return output_path.read_bytes()

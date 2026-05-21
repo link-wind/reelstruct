@@ -45,7 +45,7 @@ ReelStruct 是新项目，但不从零重写底层能力。第一阶段会复用
 
 当前已提供 demo 渲染接口：
 
-- `POST /api/samples/upload`：上传样例视频，保存文件并提取基础 metadata
+- `POST /api/samples/upload`：上传样例视频，保存文件并提取基础 metadata、真实时长和基础镜头数
 - `POST /api/runs/demo`：一次性执行结构预览、fixture 素材准备、FFmpeg 渲染，并返回 trace
 - `POST /api/media/prepare-demo-assets`：根据 `CompositionSpec` 匹配并准备 fixture clips
 - `POST /api/media/render-demo`：根据 `CompositionSpec` 生成一个 demo MP4，返回 `/output/demo.mp4`
