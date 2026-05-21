@@ -1,0 +1,59 @@
+{
+  "template": {
+    "title": "爆款护肤样例 的可迁移结构",
+    "scriptPattern": [
+      {
+        "id": "hook",
+        "label": "Hook",
+        "start": 0,
+        "duration": 3,
+        "purpose": "开头制造注意力，快速给出痛点或结果承诺。",
+        "requiredAsset": "开头吸引镜头"
+      },
+      {
+        "id": "selling_points",
+        "label": "卖点展开",
+        "start": 3,
+        "duration": 13,
+        "purpose": "连续推进核心卖点，保持信息密度。",
+        "requiredAsset": "商品特写镜头"
+      }
+    ],
+    "rhythmSummary": "约 9 个镜头 / 30 秒，开头快、中段密集、结尾收束。",
+    "packagingNotes": ["高密度字幕", "卖点标题卡片", "结尾行动号召"]
+  },
+  "transferPlan": {
+    "title": "清透保湿精华 结构迁移方案",
+    "targetTopic": "新品保湿精华短视频",
+    "gaps": [
+      {
+        "slotId": "selling_points",
+        "missingAsset": "商品特写镜头",
+        "impact": "卖点展开 缺少直接画面支撑，表达会变弱。",
+        "fillStrategy": "使用卖点卡片 + 局部放大补足商品特写"
+      }
+    ]
+  },
+  "composition": {
+    "width": 720,
+    "height": 1280,
+    "fps": 30,
+    "duration": 30,
+    "tracks": [
+      {
+        "type": "video",
+        "start": 0,
+        "duration": 3,
+        "source": "hook.mp4",
+        "slotId": "hook"
+      },
+      {
+        "type": "caption",
+        "start": 0.5,
+        "duration": 2.5,
+        "text": "用 3 秒说明：为什么现在需要清透保湿精华",
+        "slotId": "hook"
+      }
+    ]
+  }
+}

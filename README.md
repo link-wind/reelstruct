@@ -50,12 +50,39 @@ ReelStruct 是一个 AI 短视频创作平台。它从样例视频中拆解脚�
 ## 仓库结构
 
 ```text
-apps/       # 前端应用
-services/   # 后端服务
-packages/   # 共享类型、视频时间线协议等
-docs/       # 设计文档、架构说明、演示说明
+apps/web/           # Next.js 前端工作台
+services/api/       # FastAPI 后端服务
+packages/protocol/  # 结构迁移协议示例
+docs/               # 设计文档、架构说明、演示说明
+```
+
+## 本地启动
+
+启动前端：
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+启动后端：
+
+```bash
+cd services/api
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
+```
+
+运行后端测试：
+
+```bash
+cd services/api
+PYTHONPATH=. pytest
 ```
 
 ## 当前状态
 
-项目已完成命名和方向规划，正在从 ClipForge_v2 的可复用能力中拆分出新的结构迁移产品。
+项目已完成命名、方向规划和第一版工程骨架。当前后端提供 deterministic 的结构迁移预览接口，前端提供第一版结构迁移工作台界面。
