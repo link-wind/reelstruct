@@ -34,6 +34,15 @@ ReelStruct 是一个 AI 短视频创作平台。它从样例视频中拆解脚�
 - 视频处理：FFmpeg
 - 参考方案：Hyperframes 的时间线描述思路，Remotion 的组件化视频思路
 
+## 复用策略
+
+ReelStruct 是新项目，但不从零重写底层能力。第一阶段会复用 ClipForge_v2 已验证过的媒体能力：
+
+- fixture 素材库和本地 demo 素材
+- 素材匹配、复制和下载目录约定
+- FFmpeg 渲染思路
+- 后续再迁移 Celery worker 和完整 render service
+
 ## 第一版范围
 
 第一版优先完成比赛 P0 闭环：

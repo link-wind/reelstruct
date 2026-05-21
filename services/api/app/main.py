@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
-from app.models import StructurePreviewRequest, StructurePreviewResponse
+from app.fixture_asset_service import build_render_clips_from_composition
+from app.models import CompositionSpec, PrepareDemoAssetsResponse, RenderClipPreview, StructurePreviewRequest, StructurePreviewResponse
 from app.structure_service import build_structure_preview
 
 
@@ -15,3 +16,21 @@ def health_check() -> dict[str, str]:
 @app.post("/api/structure/preview", response_model=StructurePreviewResponse)
 def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePreviewResponse:
     return build_structure_preview(request.sample, request.content)
+
+
+@app.post("/api/media/prepare-demo-assets", response_model=PrepareDemoAssetsResponse)
+def prepare_demo_assets(composition: CompositionSpec) -> PrepareDemoAssetsResponse:
+    clips = build_render_clips_from_composition(composition)
+    return PrepareDemoAssetsResponse(
+        clips=[
+            RenderClipPreview(
+                scene_id=clip.scene_id,
+                local_path=clip.local_path,
+                public_url=clip.public_url,
+                caption=clip.caption,
+                start_time=clip.start_time,
+                duration=clip.duration,
+            )
+            for clip in clips
+        ]
+    )

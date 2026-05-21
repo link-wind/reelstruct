@@ -12,3 +12,5 @@ backend/downloads/*
 backend/output/*
 !backend/downloads/.gitkeep
 !backend/output/.gitkeep
+services/api/storage/*
+!services/api/storage/.gitkeep

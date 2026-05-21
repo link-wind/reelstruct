@@ -72,6 +72,19 @@ class CompositionSpec(BaseModel):
     tracks: list[CompositionTrack]
 
 
+class RenderClipPreview(BaseModel):
+    scene_id: str
+    local_path: str
+    public_url: str
+    caption: str = ""
+    start_time: float = 0
+    duration: float = 0
+
+
+class PrepareDemoAssetsResponse(BaseModel):
+    clips: list[RenderClipPreview]
+
+
 class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput
