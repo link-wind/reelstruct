@@ -108,6 +108,11 @@ type SampleUploadResponse = {
   sample: SampleVideoInput
 }
 
+type TransferMappingOverride = {
+  slot_id: string
+  target_message: string
+}
+
 const workflow = [
   {
     title: '样例输入',
@@ -155,6 +160,7 @@ export default function ReelStructWorkspace() {
   const [sample, setSample] = useState<SampleVideoInput>(defaultSample)
   const [content, setContent] = useState<NewContentInput>(defaultContent)
   const [sampleUpload, setSampleUpload] = useState<SampleUploadResponse | null>(null)
+  const [mappingDrafts, setMappingDrafts] = useState<Record<string, string>>({})
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
   const [error, setError] = useState('')
@@ -193,22 +199,28 @@ export default function ReelStructWorkspace() {
     }
   }
 
-  const runDemo = async () => {
+  const runDemo = async (options?: { useDraftOverrides?: boolean }) => {
     setError('')
     setStatus('正在执行迁移任务')
     setVideoUrl('')
     setRun(null)
 
     try {
+      const mapping_overrides =
+        options?.useDraftOverrides && preview
+          ? buildMappingOverrides(preview, mappingDrafts)
+          : []
       const runResponse = await requestJson<DemoRunResponse>('/api/runs/demo', {
         method: 'POST',
         body: {
           sample,
           content,
+          mapping_overrides,
         },
       })
       setRun(runResponse)
       setPreview(runResponse.preview)
+      setMappingDrafts(buildMappingDrafts(runResponse.preview))
       setVideoUrl(`${runResponse.rendered_video.video_url}?t=${Date.now()}`)
       setStatus('迁移任务已完成')
     } catch (caught) {
@@ -233,7 +245,7 @@ export default function ReelStructWorkspace() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               className="rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
-              onClick={runDemo}
+              onClick={() => runDemo()}
               disabled={status === '正在执行迁移任务'}
             >
               生成迁移 demo
@@ -305,11 +317,57 @@ export default function ReelStructWorkspace() {
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
               卖点，用逗号分隔
-              <input
-                className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
-                value={content.selling_points.join('，')}
-                onChange={(event) => setContent({ ...content, selling_points: splitList(event.target.value) })}
-              />
+              <div className="grid gap-2">
+                {content.selling_points.map((point, index) => (
+                  <div key={`${index}-${point}`} className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                    <input
+                      className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                      value={point}
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          selling_points: updateListItem(content.selling_points, index, event.target.value),
+                        })
+                      }
+                    />
+                    <button
+                      className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+                      onClick={() => setContent({ ...content, selling_points: moveListItem(content.selling_points, index, -1) })}
+                      disabled={index === 0}
+                      type="button"
+                    >
+                      上移
+                    </button>
+                    <button
+                      className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+                      onClick={() => setContent({ ...content, selling_points: moveListItem(content.selling_points, index, 1) })}
+                      disabled={index === content.selling_points.length - 1}
+                      type="button"
+                    >
+                      下移
+                    </button>
+                    <button
+                      className="rounded-md border border-line px-3 py-2 text-xs font-medium text-coral"
+                      onClick={() => setContent({ ...content, selling_points: removeListItem(content.selling_points, index) })}
+                      type="button"
+                    >
+                      删除
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="w-fit rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700"
+                  onClick={() =>
+                    setContent({
+                      ...content,
+                      selling_points: [...content.selling_points, `新卖点 ${content.selling_points.length + 1}`],
+                    })
+                  }
+                  type="button"
+                >
+                  添加卖点
+                </button>
+              </div>
             </label>
             <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
               已有素材，用逗号分隔
@@ -340,15 +398,26 @@ export default function ReelStructWorkspace() {
                 {preview?.template.title || '样例结构到新视频时间线'}
               </h2>
             </div>
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-mint">
-              {preview ? `${preview.composition.duration}s` : 'P0 闭环'}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-mint">
+                {preview ? `${preview.composition.duration}s` : 'P0 闭环'}
+              </span>
+              <button
+                className="rounded-md border border-line px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                onClick={() => runDemo({ useDraftOverrides: true })}
+                disabled={!preview || status === '正在执行迁移任务'}
+                type="button"
+              >
+                应用改稿并重生成
+              </button>
+            </div>
           </div>
 
           <div className="mt-5 grid gap-4">
             {(preview?.template.script_pattern || fallbackSlots).map((slot) => {
               const gap = gapLookup.get(slot.id)
               const mapping = mappingLookup.get(slot.id)
+              const draftValue = mappingDrafts[slot.id] ?? mapping?.target_message ?? slot.purpose
               return (
                 <article key={slot.id} className="grid gap-3 rounded-md border border-line p-4 sm:grid-cols-[108px_110px_1fr]">
                   <strong>{slot.label}</strong>
@@ -359,9 +428,16 @@ export default function ReelStructWorkspace() {
                     <span className={gap ? 'text-sm font-semibold text-coral' : 'text-sm font-semibold text-mint'}>
                       {gap ? '缺口补全' : '已映射'}
                     </span>
-                    <p className="mt-1 text-sm leading-6 text-slate-600">
-                      {mapping?.target_message || slot.purpose}
-                    </p>
+                    <textarea
+                      className="mt-2 min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm leading-6 text-ink outline-none focus:border-signal"
+                      value={draftValue}
+                      onChange={(event) =>
+                        setMappingDrafts({
+                          ...mappingDrafts,
+                          [slot.id]: event.target.value,
+                        })
+                      }
+                    />
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                       {gap?.fill_strategy || mapping?.asset_strategy || slot.sample_evidence}
                     </p>
@@ -452,6 +528,43 @@ function splitList(value: string): string[] {
     .split(/[,，]/)
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function updateListItem(items: string[], index: number, value: string): string[] {
+  return items.map((item, itemIndex) => (itemIndex === index ? value : item))
+}
+
+function removeListItem(items: string[], index: number): string[] {
+  return items.filter((_, itemIndex) => itemIndex !== index)
+}
+
+function moveListItem(items: string[], index: number, delta: number): string[] {
+  const nextIndex = index + delta
+  if (nextIndex < 0 || nextIndex >= items.length) return items
+  const nextItems = [...items]
+  const [item] = nextItems.splice(index, 1)
+  nextItems.splice(nextIndex, 0, item)
+  return nextItems
+}
+
+function buildMappingDrafts(preview: StructurePreviewResponse): Record<string, string> {
+  return Object.fromEntries(
+    preview.transfer_plan.mappings.map((mapping) => [mapping.slot_id, mapping.target_message]),
+  )
+}
+
+function buildMappingOverrides(
+  preview: StructurePreviewResponse,
+  drafts: Record<string, string>,
+): TransferMappingOverride[] {
+  return preview.transfer_plan.mappings
+    .map((mapping) => ({
+      slot_id: mapping.slot_id,
+      target_message: (drafts[mapping.slot_id] ?? '').trim(),
+      original_message: mapping.target_message,
+    }))
+    .filter((item) => item.target_message && item.target_message !== item.original_message)
+    .map(({ slot_id, target_message }) => ({ slot_id, target_message }))
 }
 
 const fallbackSlots: StructureSlot[] = [

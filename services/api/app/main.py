@@ -41,7 +41,11 @@ def health_check() -> dict[str, str]:
 
 @app.post("/api/structure/preview", response_model=StructurePreviewResponse)
 def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePreviewResponse:
-    return build_structure_preview(request.sample, request.content)
+    return build_structure_preview(
+        request.sample,
+        request.content,
+        mapping_overrides=request.mapping_overrides,
+    )
 
 
 @app.post("/api/runs/demo", response_model=DemoRunResponse)

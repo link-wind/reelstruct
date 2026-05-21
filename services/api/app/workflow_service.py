@@ -23,7 +23,11 @@ def create_demo_run(request: StructurePreviewRequest) -> DemoRunResponse:
         )
     ]
 
-    preview = build_structure_preview(request.sample, request.content)
+    preview = build_structure_preview(
+        request.sample,
+        request.content,
+        mapping_overrides=request.mapping_overrides,
+    )
     trace.append(
         RunTraceEvent(
             step="transfer_structure",

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from app.models import (
     CompositionSpec,
     CompositionTrack,
@@ -8,6 +10,7 @@ from app.models import (
     StructureSlot,
     TemplateStructure,
     TransferMapping,
+    TransferMappingOverride,
     TransferPlan,
 )
 
@@ -15,10 +18,11 @@ from app.models import (
 def build_structure_preview(
     sample: SampleVideoInput,
     content: NewContentInput,
+    mapping_overrides: Optional[list[TransferMappingOverride]] = None,
 ) -> StructurePreviewResponse:
     template = extract_template_structure(sample)
     gaps = detect_material_gaps(template, content)
-    transfer_plan = build_transfer_plan(template, content, gaps)
+    transfer_plan = build_transfer_plan(template, content, gaps, mapping_overrides=mapping_overrides)
     composition = build_composition_spec(template, transfer_plan)
     return StructurePreviewResponse(
         template=template,
@@ -107,12 +111,18 @@ def build_transfer_plan(
     template: TemplateStructure,
     content: NewContentInput,
     gaps: list[MaterialGap],
+    mapping_overrides: Optional[list[TransferMappingOverride]] = None,
 ) -> TransferPlan:
     gap_lookup = {gap.slot_id: gap for gap in gaps}
+    override_lookup = {
+        item.slot_id: item.target_message.strip()
+        for item in (mapping_overrides or [])
+        if item.target_message.strip()
+    }
     mappings = []
 
     for slot in template.script_pattern:
-        target_message = _target_message_for_slot(slot.id, content)
+        target_message = override_lookup.get(slot.id) or _target_message_for_slot(slot.id, content)
         asset_strategy = (
             gap_lookup[slot.id].fill_strategy
             if slot.id in gap_lookup

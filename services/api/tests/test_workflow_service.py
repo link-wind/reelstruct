@@ -38,3 +38,38 @@ def test_create_demo_run_returns_preview_assets_video_and_trace():
         "done",
     ]
     assert body["trace"][-1]["progress"] == 100
+
+
+def test_create_demo_run_applies_mapping_overrides_to_preview_and_tracks():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "咖啡拉花爆款样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先用拉花特写吸引注意，再展示手作过程。",
+            },
+            "content": {
+                "topic": "精品咖啡店开业短视频",
+                "product_name": "巷口手作咖啡",
+                "selling_points": ["手作拉花", "新店开业优惠"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "mapping_overrides": [
+                {"slot_id": "hook", "target_message": "3 秒先讲新店开业限时福利"},
+                {"slot_id": "cta", "target_message": "现在到店领取开业双杯券"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    mapping_lookup = {item["slot_id"]: item for item in body["preview"]["transfer_plan"]["mappings"]}
+    assert mapping_lookup["hook"]["target_message"] == "3 秒先讲新店开业限时福利"
+    assert mapping_lookup["cta"]["target_message"] == "现在到店领取开业双杯券"
+    caption_texts = [track["text"] for track in body["preview"]["composition"]["tracks"] if track["type"] == "caption"]
+    assert "3 秒先讲新店开业限时福利" in caption_texts
+    assert "现在到店领取开业双杯券" in caption_texts

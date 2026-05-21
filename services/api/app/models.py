@@ -56,6 +56,11 @@ class TransferMapping(BaseModel):
     asset_strategy: str
 
 
+class TransferMappingOverride(BaseModel):
+    slot_id: str
+    target_message: str
+
+
 class TransferPlan(BaseModel):
     title: str
     target_topic: str
@@ -117,6 +122,7 @@ class DemoRunResponse(BaseModel):
 class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput
+    mapping_overrides: list[TransferMappingOverride] = Field(default_factory=list)
 
 
 class StructurePreviewResponse(BaseModel):
