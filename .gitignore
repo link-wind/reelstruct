@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+.next/
+dist/
+build/
+.env
+.env.local
+.venv/
+__pycache__/
+*.pyc
+backend/downloads/*
+backend/output/*
+!backend/downloads/.gitkeep
+!backend/output/.gitkeep
