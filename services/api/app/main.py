@@ -1,7 +1,15 @@
 from fastapi import FastAPI
 
 from app.fixture_asset_service import build_render_clips_from_composition
-from app.models import CompositionSpec, PrepareDemoAssetsResponse, RenderClipPreview, StructurePreviewRequest, StructurePreviewResponse
+from app.models import (
+    CompositionSpec,
+    PrepareDemoAssetsResponse,
+    RenderClipPreview,
+    RenderDemoResponse,
+    StructurePreviewRequest,
+    StructurePreviewResponse,
+)
+from app.render_service import render_demo_video
 from app.structure_service import build_structure_preview
 
 
@@ -34,3 +42,10 @@ def prepare_demo_assets(composition: CompositionSpec) -> PrepareDemoAssetsRespon
             for clip in clips
         ]
     )
+
+
+@app.post("/api/media/render-demo", response_model=RenderDemoResponse)
+def render_demo(composition: CompositionSpec) -> RenderDemoResponse:
+    clips = build_render_clips_from_composition(composition)
+    result = render_demo_video(clips, output_filename="demo.mp4")
+    return RenderDemoResponse(video_url=result.video_url, local_path=result.local_path)

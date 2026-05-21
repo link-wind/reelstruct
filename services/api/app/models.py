@@ -85,6 +85,11 @@ class PrepareDemoAssetsResponse(BaseModel):
     clips: list[RenderClipPreview]
 
 
+class RenderDemoResponse(BaseModel):
+    video_url: str
+    local_path: str
+
+
 class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput

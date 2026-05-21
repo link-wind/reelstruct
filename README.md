@@ -43,6 +43,11 @@ ReelStruct 是新项目，但不从零重写底层能力。第一阶段会复用
 - FFmpeg 渲染思路
 - 后续再迁移 Celery worker 和完整 render service
 
+当前已提供 demo 渲染接口：
+
+- `POST /api/media/prepare-demo-assets`：根据 `CompositionSpec` 匹配并准备 fixture clips
+- `POST /api/media/render-demo`：根据 `CompositionSpec` 生成一个 demo MP4，返回 `/output/demo.mp4`
+
 ## 第一版范围
 
 第一版优先完成比赛 P0 闭环：
