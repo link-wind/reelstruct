@@ -1,0 +1,321 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+
+type StructureSlot = {
+  id: string
+  label: string
+  start: number
+  duration: number
+  purpose: string
+  required_asset: string
+  sample_evidence: string
+}
+
+type MaterialGap = {
+  slot_id: string
+  missing_asset: string
+  impact: string
+  fill_strategy: string
+}
+
+type TransferMapping = {
+  slot_id: string
+  source_label: string
+  target_message: string
+  asset_strategy: string
+}
+
+type CompositionTrack = {
+  type: 'video' | 'caption' | 'card'
+  start: number
+  duration: number
+  text: string
+  source: string
+  slot_id: string
+}
+
+type StructurePreviewResponse = {
+  template: {
+    title: string
+    script_pattern: StructureSlot[]
+    rhythm_summary: string
+    packaging_notes: string[]
+  }
+  transfer_plan: {
+    title: string
+    target_topic: string
+    mappings: TransferMapping[]
+    gaps: MaterialGap[]
+  }
+  composition: {
+    width: number
+    height: number
+    fps: number
+    duration: number
+    tracks: CompositionTrack[]
+  }
+}
+
+type RenderDemoResponse = {
+  video_url: string
+  local_path: string
+}
+
+const workflow = [
+  {
+    title: '样例输入',
+    eyebrow: 'Sample',
+    body: '使用内置样例参数模拟爆款视频解析，后续接真实上传。',
+    meta: 'demo sample',
+  },
+  {
+    title: '结构拆解',
+    eyebrow: 'Structure',
+    body: '拆出 hook、卖点展开、使用过程和 CTA，形成可迁移模板。',
+    meta: '脚本 + 节奏',
+  },
+  {
+    title: '迁移生成',
+    eyebrow: 'Transfer',
+    body: '把样例结构映射到新品主题、卖点和可用素材。',
+    meta: '脚本 + 时间线',
+  },
+  {
+    title: '成片 demo',
+    eyebrow: 'Output',
+    body: '复用 ClipForge fixture 素材和 FFmpeg 渲染链路输出 MP4。',
+    meta: 'MP4 demo',
+  },
+]
+
+const demoRequest = {
+  sample: {
+    title: '咖啡拉花爆款样例',
+    duration: 20,
+    shot_count: 6,
+    transcript_summary: '先用拉花特写吸引注意，再展示手作过程和门店氛围。',
+  },
+  content: {
+    topic: '精品咖啡店开业短视频',
+    product_name: '巷口手作咖啡',
+    selling_points: ['手作拉花', '新店开业优惠', '安静办公空间'],
+    available_assets: ['开头吸引镜头', '使用过程镜头'],
+  },
+}
+
+export default function ReelStructWorkspace() {
+  const [preview, setPreview] = useState<StructurePreviewResponse | null>(null)
+  const [videoUrl, setVideoUrl] = useState('')
+  const [status, setStatus] = useState('等待生成')
+  const [error, setError] = useState('')
+
+  const gapLookup = useMemo(() => {
+    return new Map((preview?.transfer_plan.gaps || []).map((gap) => [gap.slot_id, gap]))
+  }, [preview])
+
+  const mappingLookup = useMemo(() => {
+    return new Map((preview?.transfer_plan.mappings || []).map((mapping) => [mapping.slot_id, mapping]))
+  }, [preview])
+
+  const runDemo = async () => {
+    setError('')
+    setStatus('正在生成结构预览')
+    setVideoUrl('')
+
+    try {
+      const previewResponse = await requestJson<StructurePreviewResponse>('/api/structure/preview', {
+        method: 'POST',
+        body: demoRequest,
+      })
+      setPreview(previewResponse)
+
+      setStatus('正在准备素材并渲染 demo')
+      const renderResponse = await requestJson<RenderDemoResponse>('/api/media/render-demo', {
+        method: 'POST',
+        body: previewResponse.composition,
+      })
+      setVideoUrl(`${renderResponse.video_url}?t=${Date.now()}`)
+      setStatus('demo 已生成')
+    } catch (caught) {
+      setStatus('生成失败')
+      setError(caught instanceof Error ? caught.message : '未知错误')
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-paper text-ink">
+      <section className="border-b border-line bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-wide text-signal">ReelStruct</p>
+            <h1 className="mt-3 text-4xl font-semibold leading-tight sm:text-5xl">
+              爆款结构迁移引擎
+            </h1>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600">
+              从样例结构到新内容映射，再到 fixture 素材准备和 FFmpeg 成片 demo，一条链路跑通 P0 演示。
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              className="rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+              onClick={runDemo}
+              disabled={status === '正在生成结构预览' || status === '正在准备素材并渲染 demo'}
+            >
+              生成迁移 demo
+            </button>
+            <span className="rounded-md border border-line bg-white px-4 py-2.5 text-sm font-medium text-slate-700">
+              {status}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-5 px-6 py-6 lg:grid-cols-4">
+        {workflow.map((item) => (
+          <article key={item.title} className="rounded-lg border border-line bg-white p-5 shadow-panel">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {item.eyebrow}
+              </span>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                {item.meta}
+              </span>
+            </div>
+            <h2 className="mt-4 text-lg font-semibold">{item.title}</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">{item.body}</p>
+          </article>
+        ))}
+      </section>
+
+      {error ? (
+        <section className="mx-auto max-w-7xl px-6 pb-6">
+          <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="mx-auto grid max-w-7xl gap-6 px-6 pb-10 lg:grid-cols-[1fr_420px]">
+        <div className="rounded-lg border border-line bg-white p-5 shadow-panel">
+          <div className="flex items-center justify-between gap-4 border-b border-line pb-4">
+            <div>
+              <p className="text-sm font-semibold text-signal">结构迁移预览</p>
+              <h2 className="mt-1 text-2xl font-semibold">
+                {preview?.template.title || '样例结构到新视频时间线'}
+              </h2>
+            </div>
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-mint">
+              {preview ? `${preview.composition.duration}s` : 'P0 闭环'}
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-4">
+            {(preview?.template.script_pattern || fallbackSlots).map((slot) => {
+              const gap = gapLookup.get(slot.id)
+              const mapping = mappingLookup.get(slot.id)
+              return (
+                <article key={slot.id} className="grid gap-3 rounded-md border border-line p-4 sm:grid-cols-[108px_110px_1fr]">
+                  <strong>{slot.label}</strong>
+                  <span className="text-sm text-slate-500">
+                    {slot.start}-{Math.round((slot.start + slot.duration) * 10) / 10}s
+                  </span>
+                  <div>
+                    <span className={gap ? 'text-sm font-semibold text-coral' : 'text-sm font-semibold text-mint'}>
+                      {gap ? '缺口补全' : '已映射'}
+                    </span>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      {mapping?.target_message || slot.purpose}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      {gap?.fill_strategy || mapping?.asset_strategy || slot.sample_evidence}
+                    </p>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        </div>
+
+        <aside className="rounded-lg border border-line bg-white p-5 shadow-panel">
+          <p className="text-sm font-semibold text-signal">Demo Output</p>
+          <h2 className="mt-1 text-xl font-semibold">FFmpeg 成片预览</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-600">
+            结构预览会生成 `CompositionSpec`，后端复用 fixture 素材并渲染成 MP4。
+          </p>
+
+          <div className="mt-4 aspect-[9/16] overflow-hidden rounded-md border border-line bg-slate-950">
+            {videoUrl ? (
+              <video className="h-full w-full object-cover" src={videoUrl} controls preload="metadata" />
+            ) : (
+              <div className="flex h-full items-center justify-center px-5 text-center text-sm leading-6 text-slate-300">
+                点击“生成迁移 demo”后，这里会显示后端渲染出的 MP4。
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-md bg-slate-950 p-4 text-xs leading-5 text-slate-100">
+            <p>Tracks: {preview?.composition.tracks.length ?? 0}</p>
+            <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
+            <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
+          </div>
+        </aside>
+      </section>
+    </main>
+  )
+}
+
+async function requestJson<T>(url: string, options: { method: 'POST'; body: unknown }): Promise<T> {
+  const response = await fetch(url, {
+    method: options.method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(options.body),
+  })
+
+  if (!response.ok) {
+    throw new Error(`请求失败：${response.status} ${await response.text()}`)
+  }
+
+  return response.json() as Promise<T>
+}
+
+const fallbackSlots: StructureSlot[] = [
+  {
+    id: 'hook',
+    label: 'Hook',
+    start: 0,
+    duration: 3,
+    purpose: '痛点开场 + 快切镜头',
+    required_asset: '开头吸引镜头',
+    sample_evidence: '等待后端结构预览',
+  },
+  {
+    id: 'selling_points',
+    label: '卖点展开',
+    start: 3,
+    duration: 13,
+    purpose: '缺少商品特写，使用卖点卡片补足',
+    required_asset: '商品特写镜头',
+    sample_evidence: '等待后端结构预览',
+  },
+  {
+    id: 'usage',
+    label: '使用过程',
+    start: 16,
+    duration: 8,
+    purpose: '复用场景素材 + 字幕解释',
+    required_asset: '使用过程镜头',
+    sample_evidence: '等待后端结构预览',
+  },
+  {
+    id: 'cta',
+    label: 'CTA',
+    start: 24,
+    duration: 4,
+    purpose: '结尾行动号召和封面文案',
+    required_asset: '结尾 CTA 镜头',
+    sample_evidence: '等待后端结构预览',
+  },
+]

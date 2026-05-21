@@ -90,6 +90,22 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 ```
 
+本地联调时，先启动后端，再启动前端。前端默认把 `/api/*`、`/downloads/*`、`/output/*` 代理到 `http://127.0.0.1:8010`。
+
+打开前端后点击：
+
+```text
+生成迁移 demo
+```
+
+页面会依次调用：
+
+```text
+POST /api/structure/preview
+POST /api/media/render-demo
+GET  /output/demo.mp4
+```
+
 运行后端测试：
 
 ```bash

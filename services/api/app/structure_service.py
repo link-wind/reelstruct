@@ -150,7 +150,15 @@ def build_composition_spec(
                 type="video",
                 start=slot.start,
                 duration=slot.duration,
-                source=f"{slot.id}.mp4",
+                source=" ".join(
+                    [
+                        slot.label,
+                        slot.required_asset,
+                        slot.purpose,
+                        mapping.target_message,
+                        transfer_plan.target_topic,
+                    ]
+                ),
                 slot_id=slot.id,
             )
         )

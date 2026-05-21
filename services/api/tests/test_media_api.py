@@ -59,3 +59,27 @@ def test_render_demo_endpoint_returns_video_url():
     body = response.json()
     assert body["video_url"].startswith("/output/")
     assert body["local_path"].endswith(".mp4")
+
+
+def test_output_static_mount_serves_rendered_video():
+    client = TestClient(app)
+    render_response = client.post(
+        "/api/media/render-demo",
+        json={
+            "duration": 3,
+            "tracks": [
+                {
+                    "type": "video",
+                    "start": 0,
+                    "duration": 1,
+                    "source": "咖啡 特写",
+                    "slot_id": "selling_points",
+                }
+            ],
+        },
+    )
+
+    response = client.get(render_response.json()["video_url"])
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("video/")

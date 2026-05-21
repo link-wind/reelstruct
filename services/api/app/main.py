@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.fixture_asset_service import build_render_clips_from_composition
 from app.models import (
@@ -14,6 +17,14 @@ from app.structure_service import build_structure_preview
 
 
 app = FastAPI(title="ReelStruct API")
+STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
+DOWNLOADS_DIR = STORAGE_DIR / "downloads"
+OUTPUT_DIR = STORAGE_DIR / "output"
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
+app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
 
 
 @app.get("/health")

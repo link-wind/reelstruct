@@ -145,11 +145,17 @@ def _normalize_keywords(keywords: list[str]) -> list[str]:
 
 
 def _matched_keywords(entry: dict, keywords: list[str]) -> list[str]:
-    searchable = " ".join(
-        [
-            str(entry.get("title") or ""),
-            str(entry.get("description") or ""),
-            *[str(tag) for tag in entry.get("tags") or []],
-        ]
-    )
-    return [keyword for keyword in keywords if keyword and keyword in searchable]
+    searchable_parts = [
+        str(entry.get("title") or ""),
+        str(entry.get("description") or ""),
+        *[str(tag) for tag in entry.get("tags") or []],
+    ]
+    searchable = " ".join(searchable_parts)
+    searchable_tokens = _normalize_keywords(searchable_parts)
+    matched = []
+    for keyword in keywords:
+        if not keyword:
+            continue
+        if keyword in searchable or any(token and token in keyword for token in searchable_tokens):
+            matched.append(keyword)
+    return matched
