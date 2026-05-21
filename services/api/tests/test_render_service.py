@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.fixture_asset_service import RenderClip
-from app.render_service import build_render_plan, render_demo_video
+from app.render_service import build_render_plan, build_video_filter, render_demo_video
 
 
 def test_build_render_plan_uses_reelstruct_output_contract(tmp_path):
@@ -23,6 +23,27 @@ def test_build_render_plan_uses_reelstruct_output_contract(tmp_path):
     assert plan["segments"][0]["trimDuration"] == 3
     assert plan["output"]["width"] == 720
     assert plan["output"]["height"] == 1280
+
+
+def test_build_video_filter_adds_drawtext_when_caption_file_is_available(tmp_path):
+    caption_path = tmp_path / "caption.txt"
+    caption_path.write_text("开头抓住注意力", encoding="utf-8")
+
+    video_filter = build_video_filter(caption_path=caption_path, drawtext_available=True)
+
+    assert "drawtext=" in video_filter
+    assert f"textfile={caption_path}" in video_filter
+    assert "fontsize=42" in video_filter
+
+
+def test_build_video_filter_skips_drawtext_when_filter_is_unavailable(tmp_path):
+    caption_path = tmp_path / "caption.txt"
+    caption_path.write_text("开头抓住注意力", encoding="utf-8")
+
+    video_filter = build_video_filter(caption_path=caption_path, drawtext_available=False)
+
+    assert "drawtext=" not in video_filter
+    assert "scale=720:1280" in video_filter
 
 
 def test_render_demo_video_creates_mp4_from_fixture_clip(tmp_path):

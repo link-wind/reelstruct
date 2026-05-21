@@ -62,6 +62,31 @@ type RenderDemoResponse = {
   local_path: string
 }
 
+type RenderClipPreview = {
+  scene_id: string
+  local_path: string
+  public_url: string
+  caption: string
+  start_time: number
+  duration: number
+}
+
+type RunTraceEvent = {
+  step: string
+  title: string
+  message: string
+  progress: number
+}
+
+type DemoRunResponse = {
+  run_id: string
+  status: 'succeeded' | 'failed'
+  preview: StructurePreviewResponse
+  prepared_assets: RenderClipPreview[]
+  rendered_video: RenderDemoResponse
+  trace: RunTraceEvent[]
+}
+
 const workflow = [
   {
     title: '样例输入',
@@ -106,6 +131,7 @@ const demoRequest = {
 
 export default function ReelStructWorkspace() {
   const [preview, setPreview] = useState<StructurePreviewResponse | null>(null)
+  const [run, setRun] = useState<DemoRunResponse | null>(null)
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
   const [error, setError] = useState('')
@@ -120,23 +146,19 @@ export default function ReelStructWorkspace() {
 
   const runDemo = async () => {
     setError('')
-    setStatus('正在生成结构预览')
+    setStatus('正在执行迁移任务')
     setVideoUrl('')
+    setRun(null)
 
     try {
-      const previewResponse = await requestJson<StructurePreviewResponse>('/api/structure/preview', {
+      const runResponse = await requestJson<DemoRunResponse>('/api/runs/demo', {
         method: 'POST',
         body: demoRequest,
       })
-      setPreview(previewResponse)
-
-      setStatus('正在准备素材并渲染 demo')
-      const renderResponse = await requestJson<RenderDemoResponse>('/api/media/render-demo', {
-        method: 'POST',
-        body: previewResponse.composition,
-      })
-      setVideoUrl(`${renderResponse.video_url}?t=${Date.now()}`)
-      setStatus('demo 已生成')
+      setRun(runResponse)
+      setPreview(runResponse.preview)
+      setVideoUrl(`${runResponse.rendered_video.video_url}?t=${Date.now()}`)
+      setStatus('迁移任务已完成')
     } catch (caught) {
       setStatus('生成失败')
       setError(caught instanceof Error ? caught.message : '未知错误')
@@ -160,7 +182,7 @@ export default function ReelStructWorkspace() {
             <button
               className="rounded-md bg-ink px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
               onClick={runDemo}
-              disabled={status === '正在生成结构预览' || status === '正在准备素材并渲染 demo'}
+              disabled={status === '正在执行迁移任务'}
             >
               生成迁移 demo
             </button>
@@ -255,11 +277,42 @@ export default function ReelStructWorkspace() {
           </div>
 
           <div className="mt-4 rounded-md bg-slate-950 p-4 text-xs leading-5 text-slate-100">
+            <p>Run: {run?.run_id ?? '--'}</p>
             <p>Tracks: {preview?.composition.tracks.length ?? 0}</p>
+            <p>Assets: {run?.prepared_assets.length ?? 0}</p>
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
           </div>
         </aside>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-6 pb-12">
+        <div className="rounded-lg border border-line bg-white p-5 shadow-panel">
+          <div className="flex items-center justify-between gap-4 border-b border-line pb-4">
+            <div>
+              <p className="text-sm font-semibold text-signal">执行过程</p>
+              <h2 className="mt-1 text-2xl font-semibold">迁移任务 trace</h2>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
+              {run?.status ?? 'idle'}
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-5">
+            {(run?.trace || fallbackTrace).map((event) => (
+              <article key={event.step} className="rounded-md border border-line p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <strong className="text-sm">{event.title}</strong>
+                  <span className="text-xs font-semibold text-mint">{event.progress}%</span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{event.message}</p>
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-mint" style={{ width: `${event.progress}%` }} />
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
       </section>
     </main>
   )
@@ -317,5 +370,38 @@ const fallbackSlots: StructureSlot[] = [
     purpose: '结尾行动号召和封面文案',
     required_asset: '结尾 CTA 镜头',
     sample_evidence: '等待后端结构预览',
+  },
+]
+
+const fallbackTrace: RunTraceEvent[] = [
+  {
+    step: 'analyze_structure',
+    title: '结构拆解',
+    message: '等待后端拆解样例视频结构。',
+    progress: 0,
+  },
+  {
+    step: 'transfer_structure',
+    title: '结构迁移',
+    message: '等待生成新内容映射方案。',
+    progress: 0,
+  },
+  {
+    step: 'prepare_assets',
+    title: '素材准备',
+    message: '等待匹配 fixture 素材。',
+    progress: 0,
+  },
+  {
+    step: 'render_video',
+    title: '视频渲染',
+    message: '等待 FFmpeg 渲染输出。',
+    progress: 0,
+  },
+  {
+    step: 'done',
+    title: '生成完成',
+    message: '等待生成结果。',
+    progress: 0,
   },
 ]

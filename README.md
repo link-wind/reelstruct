@@ -45,6 +45,7 @@ ReelStruct 是新项目，但不从零重写底层能力。第一阶段会复用
 
 当前已提供 demo 渲染接口：
 
+- `POST /api/runs/demo`：一次性执行结构预览、fixture 素材准备、FFmpeg 渲染，并返回 trace
 - `POST /api/media/prepare-demo-assets`：根据 `CompositionSpec` 匹配并准备 fixture clips
 - `POST /api/media/render-demo`：根据 `CompositionSpec` 生成一个 demo MP4，返回 `/output/demo.mp4`
 
@@ -101,10 +102,16 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 页面会依次调用：
 
 ```text
-POST /api/structure/preview
-POST /api/media/render-demo
+POST /api/runs/demo
 GET  /output/demo.mp4
 ```
+
+`/api/runs/demo` 会返回：
+
+- `preview`：结构拆解、迁移方案、素材缺口和时间线
+- `prepared_assets`：从 fixture 素材库匹配并复制出的 clips
+- `rendered_video`：FFmpeg 输出的 MP4 地址
+- `trace`：结构拆解、迁移、素材准备、渲染、完成的执行过程
 
 运行后端测试：
 

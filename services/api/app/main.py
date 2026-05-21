@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from app.fixture_asset_service import build_render_clips_from_composition
 from app.models import (
     CompositionSpec,
+    DemoRunResponse,
     PrepareDemoAssetsResponse,
     RenderClipPreview,
     RenderDemoResponse,
@@ -14,6 +15,7 @@ from app.models import (
 )
 from app.render_service import render_demo_video
 from app.structure_service import build_structure_preview
+from app.workflow_service import create_demo_run
 
 
 app = FastAPI(title="ReelStruct API")
@@ -35,6 +37,11 @@ def health_check() -> dict[str, str]:
 @app.post("/api/structure/preview", response_model=StructurePreviewResponse)
 def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePreviewResponse:
     return build_structure_preview(request.sample, request.content)
+
+
+@app.post("/api/runs/demo", response_model=DemoRunResponse)
+def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
+    return create_demo_run(request)
 
 
 @app.post("/api/media/prepare-demo-assets", response_model=PrepareDemoAssetsResponse)

@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  allowedDevOrigins: ['127.0.0.1'],
   async rewrites() {
     const apiOrigin = process.env.REELSTRUCT_API_ORIGIN || 'http://127.0.0.1:8010'
     return [

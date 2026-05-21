@@ -90,6 +90,22 @@ class RenderDemoResponse(BaseModel):
     local_path: str
 
 
+class RunTraceEvent(BaseModel):
+    step: str
+    title: str
+    message: str
+    progress: int
+
+
+class DemoRunResponse(BaseModel):
+    run_id: str
+    status: Literal["succeeded", "failed"]
+    preview: "StructurePreviewResponse"
+    prepared_assets: list[RenderClipPreview] = Field(default_factory=list)
+    rendered_video: RenderDemoResponse
+    trace: list[RunTraceEvent] = Field(default_factory=list)
+
+
 class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput

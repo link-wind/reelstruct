@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import lru_cache
 import os
 from pathlib import Path
 import subprocess
@@ -43,6 +44,45 @@ def build_render_plan(clips: list[RenderClip], output_path: Path) -> dict:
     }
 
 
+def build_video_filter(
+    *,
+    caption_path: Optional[Path] = None,
+    drawtext_available: Optional[bool] = None,
+) -> str:
+    filters = [
+        f"scale={VERTICAL_WIDTH}:{VERTICAL_HEIGHT}:force_original_aspect_ratio=increase",
+        f"crop={VERTICAL_WIDTH}:{VERTICAL_HEIGHT}",
+        f"fps={OUTPUT_FPS}",
+        "setsar=1",
+    ]
+    can_draw_text = has_ffmpeg_filter("drawtext") if drawtext_available is None else drawtext_available
+    if caption_path is not None and can_draw_text:
+        filters.append(
+            "drawtext="
+            f"textfile={caption_path}:"
+            "reload=0:"
+            "fontsize=42:"
+            "fontcolor=white:"
+            "bordercolor=black:"
+            "borderw=4:"
+            "line_spacing=10:"
+            "x=(w-text_w)/2:"
+            "y=h-text_h-96"
+        )
+    return ",".join(filters)
+
+
+@lru_cache(maxsize=16)
+def has_ffmpeg_filter(filter_name: str) -> bool:
+    result = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-filters"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return f" {filter_name} " in result.stdout or f" {filter_name} " in result.stderr
+
+
 def render_demo_video(
     clips: list[RenderClip],
     *,
@@ -71,45 +111,53 @@ def render_demo_video(
 def _render_segment(segment: dict, segment_path: Path) -> None:
     input_path = str(segment["input"])
     duration = max(0.0, float(segment.get("trimDuration") or 0.0))
+    caption = str(segment.get("caption") or "").strip()
     if duration <= 0:
         raise RuntimeError(f"片段时长无效: {input_path}")
     if not os.path.exists(input_path):
         raise FileNotFoundError(input_path)
 
-    command = [
-        "ffmpeg",
-        "-y",
-        "-ss",
-        str(max(0.0, float(segment.get("trimStart") or 0.0))),
-        "-t",
-        str(duration),
-        "-i",
-        input_path,
-        "-f",
-        "lavfi",
-        "-t",
-        str(duration),
-        "-i",
-        "anullsrc=channel_layout=stereo:sample_rate=44100",
-        "-map",
-        "0:v:0",
-        "-map",
-        "1:a:0",
-        "-vf",
-        f"scale={VERTICAL_WIDTH}:{VERTICAL_HEIGHT}:force_original_aspect_ratio=increase,"
-        f"crop={VERTICAL_WIDTH}:{VERTICAL_HEIGHT},fps={OUTPUT_FPS},setsar=1",
-        "-c:v",
-        "libx264",
-        "-c:a",
-        "aac",
-        "-pix_fmt",
-        "yuv420p",
-        "-movflags",
-        "+faststart",
-        "-shortest",
-        str(segment_path),
-    ]
-    subprocess.run(command, check=True, capture_output=True)
+    caption_path = None
+    try:
+        if caption:
+            caption_path = segment_path.with_suffix(".caption.txt")
+            caption_path.write_text(caption, encoding="utf-8")
+        command = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(max(0.0, float(segment.get("trimStart") or 0.0))),
+            "-t",
+            str(duration),
+            "-i",
+            input_path,
+            "-f",
+            "lavfi",
+            "-t",
+            str(duration),
+            "-i",
+            "anullsrc=channel_layout=stereo:sample_rate=44100",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
+            "-vf",
+            build_video_filter(caption_path=caption_path),
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            "-pix_fmt",
+            "yuv420p",
+            "-movflags",
+            "+faststart",
+            "-shortest",
+            str(segment_path),
+        ]
+        subprocess.run(command, check=True, capture_output=True)
+    finally:
+        if caption_path is not None and caption_path.exists():
+            caption_path.unlink()
 
 
 def _concat_segments(segment_paths: list[Path], output_path: Path) -> None:
