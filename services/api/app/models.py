@@ -10,6 +10,14 @@ class SampleVideoInput(BaseModel):
     transcript_summary: str = ""
 
 
+class SampleUploadResponse(BaseModel):
+    sample_id: str
+    filename: str
+    local_path: str
+    public_url: str
+    sample: SampleVideoInput
+
+
 class NewContentInput(BaseModel):
     topic: str
     product_name: str = ""

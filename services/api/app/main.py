@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile
 from fastapi.staticfiles import StaticFiles
 
 from app.fixture_asset_service import build_render_clips_from_composition
@@ -10,10 +10,12 @@ from app.models import (
     PrepareDemoAssetsResponse,
     RenderClipPreview,
     RenderDemoResponse,
+    SampleUploadResponse,
     StructurePreviewRequest,
     StructurePreviewResponse,
 )
 from app.render_service import render_demo_video
+from app.sample_service import save_sample_upload
 from app.structure_service import build_structure_preview
 from app.workflow_service import create_demo_run
 
@@ -22,11 +24,14 @@ app = FastAPI(title="ReelStruct API")
 STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 DOWNLOADS_DIR = STORAGE_DIR / "downloads"
 OUTPUT_DIR = STORAGE_DIR / "output"
+SAMPLES_DIR = STORAGE_DIR / "samples"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
 app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
+app.mount("/samples", StaticFiles(directory=str(SAMPLES_DIR)), name="samples")
 
 
 @app.get("/health")
@@ -42,6 +47,11 @@ def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePre
 @app.post("/api/runs/demo", response_model=DemoRunResponse)
 def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
     return create_demo_run(request)
+
+
+@app.post("/api/samples/upload", response_model=SampleUploadResponse)
+def upload_sample_video(file: UploadFile) -> SampleUploadResponse:
+    return save_sample_upload(file, sample_dir=SAMPLES_DIR)
 
 
 @app.post("/api/media/prepare-demo-assets", response_model=PrepareDemoAssetsResponse)

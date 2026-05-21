@@ -87,6 +87,27 @@ type DemoRunResponse = {
   trace: RunTraceEvent[]
 }
 
+type SampleVideoInput = {
+  title: string
+  duration: number
+  shot_count: number
+  transcript_summary: string
+}
+
+type NewContentInput = {
+  topic: string
+  product_name: string
+  selling_points: string[]
+  available_assets: string[]
+}
+
+type SampleUploadResponse = {
+  sample_id: string
+  filename: string
+  public_url: string
+  sample: SampleVideoInput
+}
+
 const workflow = [
   {
     title: '样例输入',
@@ -114,24 +135,26 @@ const workflow = [
   },
 ]
 
-const demoRequest = {
-  sample: {
-    title: '咖啡拉花爆款样例',
-    duration: 20,
-    shot_count: 6,
-    transcript_summary: '先用拉花特写吸引注意，再展示手作过程和门店氛围。',
-  },
-  content: {
-    topic: '精品咖啡店开业短视频',
-    product_name: '巷口手作咖啡',
-    selling_points: ['手作拉花', '新店开业优惠', '安静办公空间'],
-    available_assets: ['开头吸引镜头', '使用过程镜头'],
-  },
+const defaultSample: SampleVideoInput = {
+  title: '咖啡拉花爆款样例',
+  duration: 20,
+  shot_count: 6,
+  transcript_summary: '先用拉花特写吸引注意，再展示手作过程和门店氛围。',
+}
+
+const defaultContent: NewContentInput = {
+  topic: '精品咖啡店开业短视频',
+  product_name: '巷口手作咖啡',
+  selling_points: ['手作拉花', '新店开业优惠', '安静办公空间'],
+  available_assets: ['开头吸引镜头', '使用过程镜头'],
 }
 
 export default function ReelStructWorkspace() {
   const [preview, setPreview] = useState<StructurePreviewResponse | null>(null)
   const [run, setRun] = useState<DemoRunResponse | null>(null)
+  const [sample, setSample] = useState<SampleVideoInput>(defaultSample)
+  const [content, setContent] = useState<NewContentInput>(defaultContent)
+  const [sampleUpload, setSampleUpload] = useState<SampleUploadResponse | null>(null)
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
   const [error, setError] = useState('')
@@ -144,6 +167,32 @@ export default function ReelStructWorkspace() {
     return new Map((preview?.transfer_plan.mappings || []).map((mapping) => [mapping.slot_id, mapping]))
   }, [preview])
 
+  const uploadSample = async (file: File | null) => {
+    if (!file) return
+
+    setError('')
+    setStatus('正在上传样例视频')
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const response = await fetch('/api/samples/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        throw new Error(`上传失败：${response.status} ${await response.text()}`)
+      }
+      const upload = (await response.json()) as SampleUploadResponse
+      setSampleUpload(upload)
+      setSample(upload.sample)
+      setStatus('样例已上传')
+    } catch (caught) {
+      setStatus('上传失败')
+      setError(caught instanceof Error ? caught.message : '未知错误')
+    }
+  }
+
   const runDemo = async () => {
     setError('')
     setStatus('正在执行迁移任务')
@@ -153,7 +202,10 @@ export default function ReelStructWorkspace() {
     try {
       const runResponse = await requestJson<DemoRunResponse>('/api/runs/demo', {
         method: 'POST',
-        body: demoRequest,
+        body: {
+          sample,
+          content,
+        },
       })
       setRun(runResponse)
       setPreview(runResponse.preview)
@@ -208,6 +260,67 @@ export default function ReelStructWorkspace() {
             <p className="mt-3 text-sm leading-6 text-slate-600">{item.body}</p>
           </article>
         ))}
+      </section>
+
+      <section className="mx-auto grid max-w-7xl gap-6 px-6 pb-6 lg:grid-cols-[380px_1fr]">
+        <div className="rounded-lg border border-line bg-white p-5 shadow-panel">
+          <p className="text-sm font-semibold text-signal">样例视频</p>
+          <h2 className="mt-1 text-xl font-semibold">上传或使用默认样例</h2>
+          <label className="mt-4 block rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+            <span className="font-medium text-ink">选择视频文件</span>
+            <input
+              className="mt-3 block w-full text-sm"
+              type="file"
+              accept="video/*"
+              onChange={(event) => uploadSample(event.target.files?.[0] || null)}
+            />
+          </label>
+          <div className="mt-4 grid gap-2 rounded-md bg-slate-950 p-4 text-xs leading-5 text-slate-100">
+            <p>Title: {sample.title}</p>
+            <p>Duration: {sample.duration}s</p>
+            <p>Shots: {sample.shot_count}</p>
+            <p>Source: {sampleUpload?.public_url || 'default fixture input'}</p>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-line bg-white p-5 shadow-panel">
+          <p className="text-sm font-semibold text-signal">新内容输入</p>
+          <h2 className="mt-1 text-xl font-semibold">主题、商品和素材条件</h2>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              目标主题
+              <input
+                className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={content.topic}
+                onChange={(event) => setContent({ ...content, topic: event.target.value })}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              商品/账号名称
+              <input
+                className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={content.product_name}
+                onChange={(event) => setContent({ ...content, product_name: event.target.value })}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              卖点，用逗号分隔
+              <input
+                className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={content.selling_points.join('，')}
+                onChange={(event) => setContent({ ...content, selling_points: splitList(event.target.value) })}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              已有素材，用逗号分隔
+              <input
+                className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={content.available_assets.join('，')}
+                onChange={(event) => setContent({ ...content, available_assets: splitList(event.target.value) })}
+              />
+            </label>
+          </div>
+        </div>
       </section>
 
       {error ? (
@@ -332,6 +445,13 @@ async function requestJson<T>(url: string, options: { method: 'POST'; body: unkn
   }
 
   return response.json() as Promise<T>
+}
+
+function splitList(value: string): string[] {
+  return value
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 const fallbackSlots: StructureSlot[] = [
