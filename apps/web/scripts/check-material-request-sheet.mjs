@@ -13,13 +13,27 @@ const browser = await chromium.launch({
 });
 
 try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 2800 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 2800 } });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: baseUrl });
+  const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "生成迁移 demo" }).click();
   await page.waitForTimeout(3000);
 
   await page.getByRole("button", { name: "全选缺口" }).click();
   await page.getByRole("button", { name: "加入需求单" }).click();
+  await page.getByRole("button", { name: "已拍" }).first().click();
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "导出 txt" }).click(),
+  ]);
+  const downloadPath = await download.path();
+  const fs = await import("node:fs/promises");
+  const exportedText = downloadPath ? await fs.readFile(downloadPath, "utf-8") : "";
+
+  await page.getByRole("button", { name: "复制需求单" }).click();
+  const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
 
   const bodyText = await page.locator("body").innerText();
   if (!bodyText.includes("素材需求单")) {
@@ -30,6 +44,18 @@ try {
   }
   if (!bodyText.includes("建议镜头")) {
     throw new Error("missing task details in request sheet");
+  }
+  if (!bodyText.includes("已拍")) {
+    throw new Error("missing task status toggle");
+  }
+  if (!exportedText.includes("当前状态：已拍")) {
+    throw new Error("missing exported status content");
+  }
+  if (!clipboardText.includes("素材需求单")) {
+    throw new Error("missing clipboard text");
+  }
+  if (!clipboardText.includes("当前状态：已拍")) {
+    throw new Error("missing clipboard status content");
   }
 
   console.log("REQUEST_SHEET_OK=1");
