@@ -120,6 +120,10 @@ type DemoRunResponse = {
   trace: RunTraceEvent[]
 }
 
+type DemoVariantRunsResponse = {
+  runs: DemoRunResponse[]
+}
+
 type RunRecordSummary = {
   run_id: string
   created_at: string
@@ -480,6 +484,38 @@ export default function ReelStructWorkspace() {
     } catch (caught) {
       setStatus('生成失败')
       setError(caught instanceof Error ? caught.message : '未知错误')
+    }
+  }
+
+  const runDemoVariants = async () => {
+    setError('')
+    setStatus('正在批量生成四版 demo')
+    setVideoUrl('')
+    setRun(null)
+
+    try {
+      const mapping_overrides = preview ? buildMappingOverrides(preview, slotDrafts) : []
+      const payload = await requestJson<DemoVariantRunsResponse>('/api/runs/demo-variants', {
+        method: 'POST',
+        body: {
+          sample,
+          content,
+          template_id: selectedTemplateId,
+          variant: outputVariant,
+          mapping_overrides,
+          material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
+        },
+      })
+      const selectedRun = payload.runs.find((item) => item.variant === outputVariant) || payload.runs[0]
+      setRun(selectedRun)
+      setPreview(selectedRun.preview)
+      setSlotDrafts(buildSlotDrafts(selectedRun.preview))
+      setVideoUrl(`${selectedRun.rendered_video.video_url}?t=${Date.now()}`)
+      await fetchRecentRuns()
+      setStatus('四版 demo 已生成')
+    } catch (caught) {
+      setStatus('批量生成失败')
+      setError(caught instanceof Error ? caught.message : '批量生成失败')
     }
   }
 
@@ -1074,7 +1110,7 @@ export default function ReelStructWorkspace() {
             <div className="grid gap-3 md:col-span-2">
               <div className="grid gap-2 text-sm font-medium text-slate-700">
                 <label htmlFor="output-variant">输出版本</label>
-                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                   <select
                     id="output-variant"
                     aria-label="输出版本"
@@ -1095,6 +1131,14 @@ export default function ReelStructWorkspace() {
                     type="button"
                   >
                     生成版本对比
+                  </button>
+                  <button
+                    className="rounded-md bg-ink px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-slate-400"
+                    onClick={runDemoVariants}
+                    disabled={status === '正在批量生成四版 demo' || status === '正在生成版本对比' || status === '正在执行迁移任务'}
+                    type="button"
+                  >
+                    批量生成四版 demo
                   </button>
                 </div>
               </div>

@@ -235,6 +235,43 @@ def test_compare_structure_variants_returns_all_output_options():
     assert variant_lookup["standard"]["gap_count"] == 2
 
 
+def test_create_demo_variant_runs_generates_and_persists_all_output_options():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs/demo-variants",
+        json={
+            "sample": {
+                "title": "批量版本样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "批量版本短视频",
+                "product_name": "批量版本门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "variant": "fast_rhythm",
+        },
+    )
+
+    assert response.status_code == 200
+    runs = response.json()["runs"]
+    assert [item["variant"] for item in runs] == ["standard", "high_click", "high_conversion", "fast_rhythm"]
+    assert len({item["run_id"] for item in runs}) == 4
+    assert all(item["status"] == "succeeded" for item in runs)
+    assert all(item["rendered_video"]["video_url"].startswith("/output/") for item in runs)
+    assert "高点击版" in runs[1]["preview"]["transfer_plan"]["title"]
+    assert runs[3]["preview"]["composition"]["duration"] < runs[0]["preview"]["composition"]["duration"]
+
+    list_response = client.get("/api/runs", params={"q": "批量版本门店"})
+    assert list_response.status_code == 200
+    listed_ids = {item["run_id"] for item in list_response.json()}
+    assert {item["run_id"] for item in runs}.issubset(listed_ids)
+
+
 def test_get_saved_demo_run_returns_snapshot():
     client = TestClient(app)
 

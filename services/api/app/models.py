@@ -183,6 +183,10 @@ class DemoRunResponse(BaseModel):
     trace: list[RunTraceEvent] = Field(default_factory=list)
 
 
+class DemoVariantRunsResponse(BaseModel):
+    runs: list[DemoRunResponse]
+
+
 class RunNoteUpdateRequest(BaseModel):
     note: str = ""
 

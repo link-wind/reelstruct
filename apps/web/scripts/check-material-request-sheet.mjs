@@ -35,8 +35,20 @@ try {
   if ((await highClickVariantCard.count()) > 0) {
     await highClickVariantCard.getByRole("button", { name: "选择这个版本" }).click();
   }
-  await page.getByRole("button", { name: "生成迁移 demo" }).click();
-  await page.waitForTimeout(3000);
+  await page.getByRole("button", { name: "批量生成四版 demo" }).click();
+  await page.waitForTimeout(7000);
+  const bodyTextAfterBatchRun = await page.locator("body").innerText();
+  if (!bodyTextAfterBatchRun.includes("四版 demo 已生成")) {
+    throw new Error("missing batch demo generation status");
+  }
+  for (const variantLabel of ["默认版", "高点击版", "高转化版", "高节奏版"]) {
+    if (!bodyTextAfterBatchRun.includes(variantLabel)) {
+      throw new Error(`missing generated batch run for ${variantLabel}`);
+    }
+  }
+  if (!bodyTextAfterBatchRun.includes("Variant: 高点击版")) {
+    throw new Error("missing selected batch run in current preview");
+  }
 
   await page.getByRole("button", { name: "全选缺口" }).click();
   await page.getByRole("button", { name: "加入需求单" }).click();

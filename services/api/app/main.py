@@ -7,6 +7,7 @@ from app.fixture_asset_service import build_render_clips_from_composition
 from app.models import (
     CreateTemplateFromRunRequest,
     CompositionSpec,
+    DemoVariantRunsResponse,
     DemoRunResponse,
     PrepareDemoAssetsResponse,
     RenderClipPreview,
@@ -121,6 +122,25 @@ def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
         template_title=template_record.template.title if template_record else "",
         template_tags=template_record.tags if template_record else [],
     )
+
+
+@app.post("/api/runs/demo-variants", response_model=DemoVariantRunsResponse)
+def run_demo_variant_workflows(request: StructurePreviewRequest) -> DemoVariantRunsResponse:
+    template_record = _get_template_record_or_404(request.template_id) if request.template_id else None
+    runs = []
+    for variant in ("standard", "high_click", "high_conversion", "fast_rhythm"):
+        variant_request = request.model_copy(update={"variant": variant})
+        runs.append(
+            create_demo_run(
+                variant_request,
+                runs_dir=RUNS_DIR,
+                template_override=template_record.template if template_record else None,
+                template_id=template_record.template_id if template_record else "",
+                template_title=template_record.template.title if template_record else "",
+                template_tags=template_record.tags if template_record else [],
+            )
+        )
+    return DemoVariantRunsResponse(runs=runs)
 
 
 @app.get("/api/runs/{run_id}", response_model=DemoRunResponse)
