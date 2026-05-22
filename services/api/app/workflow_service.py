@@ -20,6 +20,7 @@ from app.structure_service import build_structure_preview
 def create_demo_run(
     request: StructurePreviewRequest,
     runs_dir: Optional[Path] = None,
+    batch_id: str = "",
     template_override: Optional[TemplateStructure] = None,
     template_id: str = "",
     template_title: str = "",
@@ -83,6 +84,7 @@ def create_demo_run(
 
     response = DemoRunResponse(
         run_id=run_id,
+        batch_id=batch_id,
         created_at=created_at,
         status="succeeded",
         template_id=template_id,

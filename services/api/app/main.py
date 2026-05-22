@@ -1,4 +1,5 @@
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
@@ -129,6 +130,7 @@ def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
 @app.post("/api/runs/demo-variants", response_model=DemoVariantRunsResponse)
 def run_demo_variant_workflows(request: StructurePreviewRequest) -> DemoVariantRunsResponse:
     template_record = _get_template_record_or_404(request.template_id) if request.template_id else None
+    batch_id = f"batch-{uuid4().hex[:8]}"
     runs = []
     for variant in ("standard", "high_click", "high_conversion", "fast_rhythm"):
         variant_request = request.model_copy(update={"variant": variant})
@@ -136,6 +138,7 @@ def run_demo_variant_workflows(request: StructurePreviewRequest) -> DemoVariantR
             create_demo_run(
                 variant_request,
                 runs_dir=RUNS_DIR,
+                batch_id=batch_id,
                 template_override=template_record.template if template_record else None,
                 template_id=template_record.template_id if template_record else "",
                 template_title=template_record.template.title if template_record else "",

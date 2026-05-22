@@ -106,6 +106,7 @@ type RunTraceEvent = {
 
 type DemoRunResponse = {
   run_id: string
+  batch_id: string
   created_at: string
   status: 'succeeded' | 'failed'
   pinned: boolean
@@ -127,6 +128,7 @@ type DemoVariantRunsResponse = {
 
 type RunRecordSummary = {
   run_id: string
+  batch_id: string
   created_at: string
   status: 'succeeded' | 'failed'
   pinned: boolean
@@ -1262,8 +1264,8 @@ export default function ReelStructWorkspace() {
               <div className="rounded-md border border-line p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">包装信号</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {(preview?.template.analysis_summary.packaging_signals || fallbackAnalysis.packaging_signals).map((item) => (
-                    <span key={item} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                  {(preview?.template.analysis_summary.packaging_signals || fallbackAnalysis.packaging_signals).map((item, index) => (
+                    <span key={`${item}-${index}`} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
                       {item}
                     </span>
                   ))}
@@ -1409,6 +1411,7 @@ export default function ReelStructWorkspace() {
 
           <div className="mt-4 rounded-md bg-slate-950 p-4 text-xs leading-5 text-slate-100">
             <p>Run: {run?.run_id ?? '--'}</p>
+            <p>Batch: {run?.batch_id || '--'}</p>
             <p>Tracks: {preview?.composition.tracks.length ?? 0}</p>
             <p>Assets: {run?.prepared_assets.length ?? 0}</p>
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
@@ -1565,8 +1568,8 @@ export default function ReelStructWorkspace() {
                   </p>
                   {selectedTemplate?.tags.length ? (
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {selectedTemplate.tags.map((tag) => (
-                        <span key={tag} className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                      {selectedTemplate.tags.map((tag, index) => (
+                        <span key={`${tag}-${index}`} className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
                           标签 {tag}
                         </span>
                       ))}
@@ -1649,8 +1652,8 @@ export default function ReelStructWorkspace() {
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                       <span className="rounded-full bg-white px-2.5 py-1">槽位 {item.slot_count}</span>
                       <span className="rounded-full bg-white px-2.5 py-1">来源 {item.source_run_id}</span>
-                      {item.tags.map((tag) => (
-                        <span key={`${item.template_id}-${tag}`} className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                      {item.tags.map((tag, index) => (
+                        <span key={`${item.template_id}-${tag}-${index}`} className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
                           标签 {tag}
                         </span>
                       ))}
@@ -1848,6 +1851,7 @@ export default function ReelStructWorkspace() {
                         <div>
                           <strong className="text-sm">{item.title}</strong>
                           <p className="mt-1 text-xs text-slate-500">{item.run_id}</p>
+                          {item.batch_id ? <p className="mt-1 text-xs text-slate-500">{item.batch_id}</p> : null}
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -1870,14 +1874,15 @@ export default function ReelStructWorkspace() {
                         {isCurrentRun ? <span className="rounded-full bg-ink px-2.5 py-1 text-white">当前预览</span> : null}
                         {item.pinned ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">已置顶</span> : null}
                         {item.preferred ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">首选版本</span> : null}
+                        {item.batch_id ? <span className="rounded-full bg-white px-2.5 py-1">批次 {item.batch_id.replace('batch-', '')}</span> : null}
                         <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
                           {variantLabel(item.variant)}
                         </span>
                         {item.template_title ? (
                           <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">模板 {item.template_title}</span>
                         ) : null}
-                        {item.template_tags.map((tag) => (
-                          <span key={`${item.run_id}-${tag}`} className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                        {item.template_tags.map((tag, index) => (
+                          <span key={`${item.run_id}-${tag}-${index}`} className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
                             标签 {tag}
                           </span>
                         ))}
@@ -1981,8 +1986,8 @@ export default function ReelStructWorkspace() {
                         <div className="mt-3">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">建议镜头</p>
                           <ul className="mt-2 grid gap-2 text-sm leading-6 text-slate-700">
-                            {gap.suggested_shots.map((item) => (
-                              <li key={item}>- {item}</li>
+                            {gap.suggested_shots.map((item, index) => (
+                              <li key={`${item}-${index}`}>- {item}</li>
                             ))}
                           </ul>
                         </div>
@@ -1990,8 +1995,8 @@ export default function ReelStructWorkspace() {
                         <div className="mt-3">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">检查清单</p>
                           <ul className="mt-2 grid gap-2 text-sm leading-6 text-slate-700">
-                            {gap.pickup_checklist.map((item) => (
-                              <li key={item}>- {item}</li>
+                            {gap.pickup_checklist.map((item, index) => (
+                              <li key={`${item}-${index}`}>- {item}</li>
                             ))}
                           </ul>
                         </div>

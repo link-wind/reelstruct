@@ -50,6 +50,13 @@ def update_demo_run_preferred(run_id: str, preferred: bool, runs_dir: Path) -> O
     record = load_demo_run_record(run_id, runs_dir)
     if record is None:
         return None
+    if preferred and record.batch_id:
+        for path in runs_dir.glob("*.json"):
+            if path.stem == run_id:
+                continue
+            sibling = DemoRunResponse.model_validate_json(path.read_text(encoding="utf-8"))
+            if sibling.batch_id == record.batch_id and sibling.preferred:
+                save_demo_run_record(sibling.model_copy(update={"preferred": False}), runs_dir)
     updated = record.model_copy(update={"preferred": preferred})
     save_demo_run_record(updated, runs_dir)
     return updated
@@ -76,6 +83,7 @@ def list_demo_run_records(
                 (created_at, path.stat().st_mtime_ns),
                 RunRecordSummary(
                     run_id=payload.get("run_id", path.stem),
+                    batch_id=payload.get("batch_id", ""),
                     created_at=created_at,
                     status=payload.get("status", "failed"),
                     pinned=payload.get("pinned", False),
@@ -117,6 +125,7 @@ def list_demo_run_records(
             or needle in item.template_title.lower()
             or needle in " ".join(item.template_tags).lower()
             or needle in item.variant.lower()
+            or needle in item.batch_id.lower()
         ]
     return items[:limit]
 

@@ -298,6 +298,8 @@ def test_create_demo_variant_runs_generates_and_persists_all_output_options():
     runs = response.json()["runs"]
     assert [item["variant"] for item in runs] == ["standard", "high_click", "high_conversion", "fast_rhythm"]
     assert len({item["run_id"] for item in runs}) == 4
+    assert len({item["batch_id"] for item in runs}) == 1
+    assert runs[0]["batch_id"].startswith("batch-")
     assert all(item["status"] == "succeeded" for item in runs)
     assert all(item["rendered_video"]["video_url"].startswith("/output/") for item in runs)
     assert "高点击版" in runs[1]["preview"]["transfer_plan"]["title"]
@@ -307,6 +309,49 @@ def test_create_demo_variant_runs_generates_and_persists_all_output_options():
     assert list_response.status_code == 200
     listed_ids = {item["run_id"] for item in list_response.json()}
     assert {item["run_id"] for item in runs}.issubset(listed_ids)
+    listed_batch_ids = {item["batch_id"] for item in list_response.json() if item["run_id"] in listed_ids}
+    assert runs[0]["batch_id"] in listed_batch_ids
+
+
+def test_mark_preferred_run_is_unique_within_batch():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs/demo-variants",
+        json={
+            "sample": {
+                "title": "批次首选样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "批次首选短视频",
+                "product_name": "批次首选门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    runs = response.json()["runs"]
+    first_run_id = runs[1]["run_id"]
+    second_run_id = runs[2]["run_id"]
+    batch_id = runs[0]["batch_id"]
+
+    first_preferred_response = client.patch(f"/api/runs/{first_run_id}/preferred", json={"preferred": True})
+    second_preferred_response = client.patch(f"/api/runs/{second_run_id}/preferred", json={"preferred": True})
+    batch_list_response = client.get("/api/runs", params={"q": batch_id})
+
+    assert first_preferred_response.status_code == 200
+    assert second_preferred_response.status_code == 200
+    assert second_preferred_response.json()["preferred"] is True
+    assert client.get(f"/api/runs/{first_run_id}").json()["preferred"] is False
+    assert client.get(f"/api/runs/{second_run_id}").json()["preferred"] is True
+    batch_items = [item for item in batch_list_response.json() if item["batch_id"] == batch_id]
+    assert sum(1 for item in batch_items if item["preferred"]) == 1
+    assert [item for item in batch_items if item["preferred"]][0]["run_id"] == second_run_id
 
 
 def test_get_saved_demo_run_returns_snapshot():

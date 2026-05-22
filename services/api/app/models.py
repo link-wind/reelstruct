@@ -149,6 +149,7 @@ class RunTraceEvent(BaseModel):
 
 class RunRecordSummary(BaseModel):
     run_id: str
+    batch_id: str = ""
     created_at: str = ""
     status: Literal["succeeded", "failed"]
     pinned: bool = False
@@ -170,6 +171,7 @@ class RunRecordSummary(BaseModel):
 
 class DemoRunResponse(BaseModel):
     run_id: str
+    batch_id: str = ""
     created_at: str = ""
     status: Literal["succeeded", "failed"]
     pinned: bool = False

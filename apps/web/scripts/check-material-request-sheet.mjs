@@ -49,6 +49,9 @@ try {
   if (!bodyTextAfterBatchRun.includes("Variant: 高点击版")) {
     throw new Error("missing selected batch run in current preview");
   }
+  if (!bodyTextAfterBatchRun.includes("Batch: batch-")) {
+    throw new Error("missing batch id in current preview");
+  }
 
   await page.getByRole("button", { name: "全选缺口" }).click();
   await page.getByRole("button", { name: "加入需求单" }).click();
