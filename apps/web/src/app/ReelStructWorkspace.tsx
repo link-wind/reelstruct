@@ -105,11 +105,23 @@ type RunTraceEvent = {
 
 type DemoRunResponse = {
   run_id: string
+  created_at: string
   status: 'succeeded' | 'failed'
   preview: StructurePreviewResponse
   prepared_assets: RenderClipPreview[]
   rendered_video: RenderDemoResponse
   trace: RunTraceEvent[]
+}
+
+type RunRecordSummary = {
+  run_id: string
+  created_at: string
+  status: 'succeeded' | 'failed'
+  title: string
+  target_topic: string
+  gap_count: number
+  material_request_count: number
+  video_url: string
 }
 
 type SampleVideoInput = {
@@ -204,6 +216,7 @@ export default function ReelStructWorkspace() {
   const [requestSheetIds, setRequestSheetIds] = useState<string[]>([])
   const [requestSheetStatus, setRequestSheetStatus] = useState<Record<string, MaterialTaskStatus>>({})
   const [requestSheetFeedback, setRequestSheetFeedback] = useState('')
+  const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
   const [error, setError] = useState('')
@@ -242,6 +255,10 @@ export default function ReelStructWorkspace() {
     const timer = window.setTimeout(() => setRequestSheetFeedback(''), 1800)
     return () => window.clearTimeout(timer)
   }, [requestSheetFeedback])
+
+  useEffect(() => {
+    void fetchRecentRuns()
+  }, [])
 
   const uploadSample = async (file: File | null) => {
     if (!file) return
@@ -322,10 +339,24 @@ export default function ReelStructWorkspace() {
       setPreview(runResponse.preview)
       setSlotDrafts(buildSlotDrafts(runResponse.preview))
       setVideoUrl(`${runResponse.rendered_video.video_url}?t=${Date.now()}`)
+      void fetchRecentRuns()
       setStatus('迁移任务已完成')
     } catch (caught) {
       setStatus('生成失败')
       setError(caught instanceof Error ? caught.message : '未知错误')
+    }
+  }
+
+  const fetchRecentRuns = async () => {
+    try {
+      const response = await fetch('/api/runs')
+      if (!response.ok) {
+        throw new Error(`读取记录失败：${response.status}`)
+      }
+      const runs = (await response.json()) as RunRecordSummary[]
+      setRecentRuns(runs)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '读取记录失败')
     }
   }
 
@@ -408,6 +439,23 @@ export default function ReelStructWorkspace() {
       setStatus('run 记录已导出')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '导出 run 记录失败')
+    }
+  }
+
+  const loadRunRecord = async (runId: string) => {
+    try {
+      const response = await fetch(`/api/runs/${runId}`)
+      if (!response.ok) {
+        throw new Error(`读取 run 失败：${response.status}`)
+      }
+      const payload = (await response.json()) as DemoRunResponse
+      setRun(payload)
+      setPreview(payload.preview)
+      setSlotDrafts(buildSlotDrafts(payload.preview))
+      setVideoUrl(payload.rendered_video.video_url ? `${payload.rendered_video.video_url}?t=${Date.now()}` : '')
+      setStatus(`已载入 ${payload.run_id}`)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '读取 run 失败')
     }
   }
 
@@ -792,6 +840,55 @@ export default function ReelStructWorkspace() {
             >
               导出 run JSON
             </button>
+            <button
+              className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700"
+              onClick={() => void fetchRecentRuns()}
+              type="button"
+            >
+              刷新记录
+            </button>
+          </div>
+
+          <div className="mt-5 border-t border-line pt-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-signal">最近 run 记录</p>
+                <h3 className="mt-1 text-lg font-semibold">最近生成结果</h3>
+              </div>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                {recentRuns.length} 条
+              </span>
+            </div>
+            {recentRuns.length ? (
+              <div className="mt-4 grid gap-3">
+                {recentRuns.slice(0, 5).map((item) => (
+                  <article key={item.run_id} className="rounded-md border border-line bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <strong className="text-sm">{item.title}</strong>
+                        <p className="mt-1 text-xs text-slate-500">{item.run_id}</p>
+                      </div>
+                      <button
+                        className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                        onClick={() => void loadRunRecord(item.run_id)}
+                        type="button"
+                      >
+                        载入记录
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                      <span className="rounded-full bg-white px-2.5 py-1">缺口 {item.gap_count}</span>
+                      <span className="rounded-full bg-white px-2.5 py-1">需求单 {item.material_request_count}</span>
+                      <span className="rounded-full bg-white px-2.5 py-1">{item.status}</span>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">{item.target_topic}</p>
+                    <p className="mt-2 text-xs text-slate-500">{formatRunTime(item.created_at)}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-slate-600">生成后这里会保留最近几次 run 记录。</p>
+            )}
           </div>
 
           <div className="mt-5 border-t border-line pt-5">
@@ -1141,6 +1238,13 @@ function buildMaterialRequestSheetPayload(
     slot_id: slotId,
     status: statusLookup[slotId] ?? '待补拍',
   }))
+}
+
+function formatRunTime(value: string): string {
+  if (!value) return '时间未知'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 const fallbackSlots: StructureSlot[] = [

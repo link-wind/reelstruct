@@ -45,6 +45,9 @@ try {
   if (!bodyText.includes("素材需求单")) {
     throw new Error("missing request sheet panel");
   }
+  if (!bodyText.includes("最近 run 记录")) {
+    throw new Error("missing recent runs panel");
+  }
   if (!bodyText.includes("商品卖点特写")) {
     throw new Error("missing selected material task content");
   }
@@ -69,6 +72,9 @@ try {
   const rerunBodyText = await page.locator("body").innerText();
   if (!rerunBodyText.includes("当前状态：已拍")) {
     throw new Error("missing persisted request sheet status after rerun");
+  }
+  if (!rerunBodyText.includes("巷口手作咖啡 结构迁移方案")) {
+    throw new Error("missing recent run summary content");
   }
 
   const [jsonDownload] = await Promise.all([

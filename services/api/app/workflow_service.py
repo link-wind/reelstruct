@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -17,6 +18,7 @@ from app.structure_service import build_structure_preview
 
 def create_demo_run(request: StructurePreviewRequest, runs_dir: Optional[Path] = None) -> DemoRunResponse:
     run_id = f"demo-{uuid4().hex[:8]}"
+    created_at = datetime.now(timezone.utc).isoformat()
     trace = [
         RunTraceEvent(
             step="analyze_structure",
@@ -71,6 +73,7 @@ def create_demo_run(request: StructurePreviewRequest, runs_dir: Optional[Path] =
 
     response = DemoRunResponse(
         run_id=run_id,
+        created_at=created_at,
         status="succeeded",
         preview=preview,
         prepared_assets=[

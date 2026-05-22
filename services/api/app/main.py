@@ -10,13 +10,14 @@ from app.models import (
     PrepareDemoAssetsResponse,
     RenderClipPreview,
     RenderDemoResponse,
+    RunRecordSummary,
     SampleUploadResponse,
     TranscriptUploadResponse,
     StructurePreviewRequest,
     StructurePreviewResponse,
 )
 from app.render_service import render_demo_video
-from app.run_record_service import load_demo_run_record
+from app.run_record_service import list_demo_run_records, load_demo_run_record
 from app.sample_service import extract_transcript_upload, save_sample_upload
 from app.structure_service import build_structure_preview
 from app.workflow_service import create_demo_run
@@ -64,6 +65,11 @@ def get_run_record(run_id: str) -> DemoRunResponse:
     if record is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return record
+
+
+@app.get("/api/runs", response_model=list[RunRecordSummary])
+def list_run_records() -> list[RunRecordSummary]:
+    return list_demo_run_records(RUNS_DIR)
 
 
 @app.post("/api/samples/upload", response_model=SampleUploadResponse)

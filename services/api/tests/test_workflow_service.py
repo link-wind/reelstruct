@@ -169,3 +169,59 @@ def test_get_saved_demo_run_returns_snapshot():
     assert saved["preview"]["transfer_plan"]["material_request_sheet"] == [
         {"slot_id": "selling_points", "status": "已拍"}
     ]
+
+
+def test_list_saved_demo_runs_returns_latest_first():
+    client = TestClient(app)
+
+    first_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "第一条样例",
+                "duration": 18,
+                "shot_count": 5,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "第一条短视频",
+                "product_name": "第一家门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+    second_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "第二条样例",
+                "duration": 22,
+                "shot_count": 7,
+                "transcript_summary": "先给结果，再给过程。",
+            },
+            "content": {
+                "topic": "第二条短视频",
+                "product_name": "第二家门店",
+                "selling_points": ["卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    first_run = first_response.json()
+    second_run = second_response.json()
+    list_response = client.get("/api/runs")
+
+    assert list_response.status_code == 200
+    runs = list_response.json()
+    summary_lookup = {item["run_id"]: item for item in runs}
+    run_ids = [item["run_id"] for item in runs]
+    assert second_run["run_id"] in summary_lookup
+    assert first_run["run_id"] in summary_lookup
+    assert run_ids.index(second_run["run_id"]) < run_ids.index(first_run["run_id"])
+    assert summary_lookup[second_run["run_id"]]["title"] == "第二家门店 结构迁移方案"
+    assert "created_at" in summary_lookup[second_run["run_id"]]
