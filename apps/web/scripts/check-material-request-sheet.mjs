@@ -22,6 +22,12 @@ try {
 
   await page.getByRole("button", { name: "全选缺口" }).click();
   await page.getByRole("button", { name: "加入需求单" }).click();
+  await page.getByRole("button", { name: "移出需求单" }).first().click();
+  const remainingAfterRemove = await page.getByRole("button", { name: "移出需求单" }).count();
+  if (remainingAfterRemove < 1) {
+    throw new Error("expected request sheet to keep remaining tasks after single remove");
+  }
+  await page.getByRole("button", { name: "加入需求单" }).click();
   await page.getByRole("button", { name: "已拍" }).first().click();
 
   const [download] = await Promise.all([
@@ -56,6 +62,12 @@ try {
   }
   if (!clipboardText.includes("当前状态：已拍")) {
     throw new Error("missing clipboard status content");
+  }
+
+  await page.getByRole("button", { name: "清空需求单" }).click();
+  const bodyTextAfterClear = await page.locator("body").innerText();
+  if (!bodyTextAfterClear.includes("先从补拍建议里勾选缺口，再点“加入需求单”。")) {
+    throw new Error("missing empty request sheet hint after clear");
   }
 
   console.log("REQUEST_SHEET_OK=1");

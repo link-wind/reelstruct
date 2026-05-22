@@ -322,7 +322,12 @@ export default function ReelStructWorkspace() {
   }
 
   const addSelectedGapsToRequestSheet = () => {
-    setRequestSheetIds(selectedGapIds)
+    setRequestSheetIds((current) => {
+      const nextIds = new Set([...current, ...selectedGapIds])
+      return (preview?.transfer_plan.gaps || [])
+        .map((gap) => gap.slot_id)
+        .filter((slotId) => nextIds.has(slotId))
+    })
     setRequestSheetStatus((current) => {
       const next = { ...current }
       selectedGapIds.forEach((slotId) => {
@@ -339,6 +344,22 @@ export default function ReelStructWorkspace() {
       [slotId]: nextStatus,
     }))
     setRequestSheetFeedback('')
+  }
+
+  const removeFromRequestSheet = (slotId: string) => {
+    setRequestSheetIds((current) => current.filter((item) => item !== slotId))
+    setRequestSheetStatus((current) => {
+      const next = { ...current }
+      delete next[slotId]
+      return next
+    })
+    setRequestSheetFeedback('已移出任务')
+  }
+
+  const clearRequestSheet = () => {
+    setRequestSheetIds([])
+    setRequestSheetStatus({})
+    setRequestSheetFeedback('需求单已清空')
   }
 
   const copyRequestSheet = async () => {
@@ -834,6 +855,14 @@ export default function ReelStructWorkspace() {
                   ) : null}
                   <button
                     className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+                    onClick={clearRequestSheet}
+                    disabled={!requestSheetGaps.length}
+                    type="button"
+                  >
+                    清空需求单
+                  </button>
+                  <button
+                    className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
                     onClick={copyRequestSheet}
                     disabled={!requestSheetGaps.length}
                     type="button"
@@ -854,14 +883,23 @@ export default function ReelStructWorkspace() {
                 <div className="mt-4 grid gap-3">
                   {requestSheetGaps.map((gap) => (
                     <article key={gap.slot_id} className="rounded-md border border-line bg-slate-50 p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <strong className="text-sm">{labelForSlot(gap.slot_id)}</strong>
-                        <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
-                          {gap.suggested_asset_type}
-                        </span>
-                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                          当前状态：{requestSheetStatus[gap.slot_id] ?? '待补拍'}
-                        </span>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <strong className="text-sm">{labelForSlot(gap.slot_id)}</strong>
+                          <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                            {gap.suggested_asset_type}
+                          </span>
+                          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                            当前状态：{requestSheetStatus[gap.slot_id] ?? '待补拍'}
+                          </span>
+                        </div>
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                          onClick={() => removeFromRequestSheet(gap.slot_id)}
+                          type="button"
+                        >
+                          移出需求单
+                        </button>
                       </div>
                       <p className="mt-2 text-sm leading-6 text-slate-700">{gap.fill_strategy}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
