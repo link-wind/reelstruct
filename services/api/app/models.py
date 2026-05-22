@@ -203,6 +203,18 @@ class CreateTemplateFromRunRequest(BaseModel):
     title: str = ""
 
 
+class UpdateStructureTemplateSlotRequest(BaseModel):
+    slot_id: str
+    duration: float = Field(default=0, gt=0)
+    required_asset: str = ""
+
+
+class UpdateStructureTemplateRequest(BaseModel):
+    title: str = ""
+    rhythm_summary: str = ""
+    slots: list[UpdateStructureTemplateSlotRequest] = Field(default_factory=list)
+
+
 class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput

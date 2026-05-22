@@ -3,7 +3,12 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from app.models import DemoRunResponse, StructureTemplateRecord, StructureTemplateSummary
+from app.models import (
+    DemoRunResponse,
+    StructureTemplateRecord,
+    StructureTemplateSummary,
+    UpdateStructureTemplateRequest,
+)
 
 
 def save_structure_template_record(record: StructureTemplateRecord, templates_dir: Path) -> Path:
@@ -46,6 +51,45 @@ def delete_structure_template_record(template_id: str, templates_dir: Path) -> b
         return False
     target_path.unlink()
     return True
+
+
+def update_structure_template_record(
+    template_id: str,
+    request: UpdateStructureTemplateRequest,
+    templates_dir: Path,
+) -> Optional[StructureTemplateRecord]:
+    record = load_structure_template_record(template_id, templates_dir)
+    if record is None:
+        return None
+
+    slot_updates = {item.slot_id: item for item in request.slots}
+    next_start = 0.0
+    next_slots = []
+    for slot in record.template.script_pattern:
+        update = slot_updates.get(slot.id)
+        next_duration = update.duration if update else slot.duration
+        next_required_asset = update.required_asset.strip() if update and update.required_asset.strip() else slot.required_asset
+        next_slots.append(
+            slot.model_copy(
+                update={
+                    "start": round(next_start, 1),
+                    "duration": round(next_duration, 1),
+                    "required_asset": next_required_asset,
+                }
+            )
+        )
+        next_start += next_duration
+
+    next_template = record.template.model_copy(
+        update={
+            "title": request.title.strip() or record.template.title,
+            "rhythm_summary": request.rhythm_summary.strip() or record.template.rhythm_summary,
+            "script_pattern": next_slots,
+        }
+    )
+    updated = record.model_copy(update={"template": next_template})
+    save_structure_template_record(updated, templates_dir)
+    return updated
 
 
 def list_structure_template_records(templates_dir: Path, limit: int = 20) -> list[StructureTemplateSummary]:

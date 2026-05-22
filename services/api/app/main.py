@@ -18,6 +18,7 @@ from app.models import (
     StructureTemplateRecord,
     StructureTemplateSummary,
     TranscriptUploadResponse,
+    UpdateStructureTemplateRequest,
     StructurePreviewRequest,
     StructurePreviewResponse,
 )
@@ -36,6 +37,7 @@ from app.template_record_service import (
     delete_structure_template_record,
     list_structure_template_records,
     load_structure_template_record,
+    update_structure_template_record,
 )
 from app.workflow_service import create_demo_run
 
@@ -140,6 +142,14 @@ def list_templates() -> list[StructureTemplateSummary]:
 @app.get("/api/templates/{template_id}", response_model=StructureTemplateRecord)
 def get_template(template_id: str) -> StructureTemplateRecord:
     return _get_template_record_or_404(template_id)
+
+
+@app.patch("/api/templates/{template_id}", response_model=StructureTemplateRecord)
+def update_template(template_id: str, request: UpdateStructureTemplateRequest) -> StructureTemplateRecord:
+    record = update_structure_template_record(template_id, request, TEMPLATES_DIR)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return record
 
 
 @app.delete("/api/templates/{template_id}", status_code=204)

@@ -562,3 +562,87 @@ def test_list_saved_demo_runs_supports_template_filter():
     runs = filtered_list_response.json()
     assert any(item["run_id"] == templated_run["run_id"] for item in runs)
     assert all(item["template_id"] == template_id for item in runs)
+
+
+def test_update_template_changes_title_rhythm_and_slot_fields():
+    client = TestClient(app)
+
+    run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "模板编辑来源样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "模板编辑短视频",
+                "product_name": "模板编辑门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert run_response.status_code == 200
+    run_id = run_response.json()["run_id"]
+
+    save_response = client.post(f"/api/templates/from-run/{run_id}", json={"title": "待编辑模板"})
+    assert save_response.status_code == 200
+    template = save_response.json()
+    template_id = template["template_id"]
+
+    update_response = client.patch(
+        f"/api/templates/{template_id}",
+        json={
+            "title": "夜咖开业模板",
+            "rhythm_summary": "5-7-4-4 的夜场节奏",
+            "slots": [
+                {"slot_id": "hook", "duration": 5.0, "required_asset": "夜景开场镜头"},
+                {"slot_id": "selling_points", "duration": 7.0, "required_asset": "吧台特写镜头"},
+            ],
+        },
+    )
+    detail_response = client.get(f"/api/templates/{template_id}")
+
+    assert update_response.status_code == 200
+    assert detail_response.status_code == 200
+    updated = detail_response.json()
+    slot_lookup = {slot["id"]: slot for slot in updated["template"]["script_pattern"]}
+    assert updated["template"]["title"] == "夜咖开业模板"
+    assert updated["template"]["rhythm_summary"] == "5-7-4-4 的夜场节奏"
+    assert slot_lookup["hook"]["duration"] == 5.0
+    assert slot_lookup["hook"]["required_asset"] == "夜景开场镜头"
+    assert slot_lookup["selling_points"]["duration"] == 7.0
+    assert slot_lookup["selling_points"]["required_asset"] == "吧台特写镜头"
+    assert slot_lookup["selling_points"]["start"] == 5.0
+
+    templated_run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "套编辑后模板样例",
+                "duration": 30,
+                "shot_count": 8,
+                "transcript_summary": "这个样例不该决定最终结构。",
+            },
+            "content": {
+                "topic": "夜咖开业短视频",
+                "product_name": "夜巷咖啡",
+                "selling_points": ["深夜营业"],
+                "available_assets": ["使用过程镜头"],
+            },
+            "template_id": template_id,
+        },
+    )
+
+    assert templated_run_response.status_code == 200
+    templated_run = templated_run_response.json()
+    run_slot_lookup = {slot["id"]: slot for slot in templated_run["preview"]["template"]["script_pattern"]}
+    run_gap_lookup = {gap["slot_id"]: gap for gap in templated_run["preview"]["transfer_plan"]["gaps"]}
+    assert templated_run["template_title"] == "夜咖开业模板"
+    assert templated_run["preview"]["template"]["rhythm_summary"] == "5-7-4-4 的夜场节奏"
+    assert run_slot_lookup["hook"]["duration"] == 5.0
+    assert run_slot_lookup["hook"]["required_asset"] == "夜景开场镜头"
+    assert run_gap_lookup["hook"]["missing_asset"] == "夜景开场镜头"

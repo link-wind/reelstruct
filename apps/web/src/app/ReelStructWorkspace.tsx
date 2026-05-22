@@ -138,6 +138,8 @@ type StructureTemplateRecord = {
   source_run_id: string
   template: {
     title: string
+    rhythm_summary: string
+    script_pattern: StructureSlot[]
   }
 }
 
@@ -189,6 +191,17 @@ type SlotDraft = {
   target_message: string
   sample_evidence: string
   asset_strategy: string
+}
+
+type TemplateSlotDraft = {
+  duration: string
+  required_asset: string
+}
+
+type TemplateEditorDraft = {
+  title: string
+  rhythm_summary: string
+  slots: Record<string, TemplateSlotDraft>
 }
 
 const workflow = [
@@ -247,6 +260,8 @@ export default function ReelStructWorkspace() {
   const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
   const [templates, setTemplates] = useState<StructureTemplateSummary[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [selectedTemplateDetail, setSelectedTemplateDetail] = useState<StructureTemplateRecord | null>(null)
+  const [templateEditorDraft, setTemplateEditorDraft] = useState<TemplateEditorDraft | null>(null)
   const [templateNameDraft, setTemplateNameDraft] = useState('')
   const [runTemplateFilter, setRunTemplateFilter] = useState('')
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
@@ -306,6 +321,15 @@ export default function ReelStructWorkspace() {
   useEffect(() => {
     void fetchTemplates()
   }, [])
+
+  useEffect(() => {
+    if (!selectedTemplateId) {
+      setSelectedTemplateDetail(null)
+      setTemplateEditorDraft(null)
+      return
+    }
+    void fetchTemplateDetail(selectedTemplateId)
+  }, [selectedTemplateId])
 
   useEffect(() => {
     if (selectedTemplate) {
@@ -443,9 +467,37 @@ export default function ReelStructWorkspace() {
       setTemplates(records)
       if (selectedTemplateId && !records.some((item) => item.template_id === selectedTemplateId)) {
         setSelectedTemplateId('')
+        setSelectedTemplateDetail(null)
+        setTemplateEditorDraft(null)
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '读取模板失败')
+    }
+  }
+
+  const fetchTemplateDetail = async (templateId: string) => {
+    try {
+      const response = await fetch(`/api/templates/${templateId}`)
+      if (!response.ok) {
+        throw new Error(`读取模板详情失败：${response.status}`)
+      }
+      const record = (await response.json()) as StructureTemplateRecord
+      setSelectedTemplateDetail(record)
+      setTemplateEditorDraft({
+        title: record.template.title,
+        rhythm_summary: record.template.rhythm_summary,
+        slots: Object.fromEntries(
+          record.template.script_pattern.map((slot) => [
+            slot.id,
+            {
+              duration: String(slot.duration),
+              required_asset: slot.required_asset,
+            },
+          ]),
+        ),
+      })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '读取模板详情失败')
     }
   }
 
@@ -657,6 +709,50 @@ export default function ReelStructWorkspace() {
       setStatus('模板已删除')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '删除模板失败')
+    }
+  }
+
+  const saveTemplateEdits = async () => {
+    if (!selectedTemplateId || !templateEditorDraft || !selectedTemplateDetail) return
+    try {
+      const response = await fetch(`/api/templates/${selectedTemplateId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: templateEditorDraft.title,
+          rhythm_summary: templateEditorDraft.rhythm_summary,
+          slots: selectedTemplateDetail.template.script_pattern.map((slot) => ({
+            slot_id: slot.id,
+            duration: Number(templateEditorDraft.slots[slot.id]?.duration || slot.duration),
+            required_asset: templateEditorDraft.slots[slot.id]?.required_asset || slot.required_asset,
+          })),
+        }),
+      })
+      if (!response.ok) {
+        throw new Error(`保存模板修改失败：${response.status}`)
+      }
+      const record = (await response.json()) as StructureTemplateRecord
+      setSelectedTemplateDetail(record)
+      setTemplateEditorDraft({
+        title: record.template.title,
+        rhythm_summary: record.template.rhythm_summary,
+        slots: Object.fromEntries(
+          record.template.script_pattern.map((slot) => [
+            slot.id,
+            {
+              duration: String(slot.duration),
+              required_asset: slot.required_asset,
+            },
+          ]),
+        ),
+      })
+      setTemplateNameDraft(record.template.title)
+      await fetchTemplates()
+      setStatus('模板修改已保存')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '保存模板修改失败')
     }
   }
 
@@ -1220,6 +1316,110 @@ export default function ReelStructWorkspace() {
                 先生成一个 run，再把当前结构保存成模板。
               </p>
             )}
+            {selectedTemplateDetail && templateEditorDraft ? (
+              <div className="mt-5 border-t border-line pt-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-signal">模板编辑</p>
+                    <h3 className="mt-1 text-lg font-semibold">修改当前模板</h3>
+                  </div>
+                  <button
+                    className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                    onClick={saveTemplateEdits}
+                    type="button"
+                  >
+                    保存模板修改
+                  </button>
+                </div>
+                <div className="mt-4 grid gap-4">
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    编辑模板标题
+                    <input
+                      aria-label="编辑模板标题"
+                      className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                      value={templateEditorDraft.title}
+                      onChange={(event) =>
+                        setTemplateEditorDraft({
+                          ...templateEditorDraft,
+                          title: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    模板节奏摘要
+                    <input
+                      aria-label="模板节奏摘要"
+                      className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                      value={templateEditorDraft.rhythm_summary}
+                      onChange={(event) =>
+                        setTemplateEditorDraft({
+                          ...templateEditorDraft,
+                          rhythm_summary: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="grid gap-3">
+                    {selectedTemplateDetail.template.script_pattern.map((slot) => (
+                      <article key={`template-edit-${slot.id}`} className="rounded-md border border-line bg-slate-50 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <strong className="text-sm">{labelForSlot(slot.id)}</strong>
+                          <span className="text-xs text-slate-500">
+                            {slot.start}-{Math.round((slot.start + slot.duration) * 10) / 10}s
+                          </span>
+                        </div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <label className="grid gap-2 text-xs font-medium text-slate-700">
+                            {labelForSlot(slot.id)} 时长
+                            <input
+                              aria-label={`${labelForSlot(slot.id)} 时长`}
+                              className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                              type="number"
+                              min="0.5"
+                              step="0.5"
+                              value={templateEditorDraft.slots[slot.id]?.duration ?? String(slot.duration)}
+                              onChange={(event) =>
+                                setTemplateEditorDraft({
+                                  ...templateEditorDraft,
+                                  slots: {
+                                    ...templateEditorDraft.slots,
+                                    [slot.id]: {
+                                      ...templateEditorDraft.slots[slot.id],
+                                      duration: event.target.value,
+                                    },
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="grid gap-2 text-xs font-medium text-slate-700">
+                            {labelForSlot(slot.id)} 素材要求
+                            <input
+                              aria-label={`${labelForSlot(slot.id)} 素材要求`}
+                              className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                              value={templateEditorDraft.slots[slot.id]?.required_asset ?? slot.required_asset}
+                              onChange={(event) =>
+                                setTemplateEditorDraft({
+                                  ...templateEditorDraft,
+                                  slots: {
+                                    ...templateEditorDraft.slots,
+                                    [slot.id]: {
+                                      ...templateEditorDraft.slots[slot.id],
+                                      required_asset: event.target.value,
+                                    },
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-5 border-t border-line pt-5">

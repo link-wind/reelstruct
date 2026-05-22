@@ -73,7 +73,7 @@ try {
   if (!rerunBodyText.includes("当前状态：已拍")) {
     throw new Error("missing persisted request sheet status after rerun");
   }
-  if (!rerunBodyText.includes("巷口手作咖啡 结构迁移方案")) {
+  if ((await page.locator('text=/demo-[a-z0-9]{8}/').count()) < 2) {
     throw new Error("missing recent run summary content");
   }
   await page.getByRole("button", { name: "只看成功" }).click();
@@ -126,6 +126,17 @@ try {
   if (!bodyTextAfterTemplateSave.includes(templateTitle)) {
     throw new Error("missing saved template title");
   }
+  const editedTemplateTitle = `${firstCurrentRunMatch[1]} 夜咖模板`;
+  await page.getByLabel("编辑模板标题").fill(editedTemplateTitle);
+  await page.getByLabel("模板节奏摘要").fill("5-7-5-3 的夜场节奏");
+  await page.getByLabel("Hook 时长").fill("5");
+  await page.getByLabel("Hook 素材要求").fill("夜景开场镜头");
+  await page.getByRole("button", { name: "保存模板修改" }).click();
+  await page.waitForTimeout(500);
+  const bodyTextAfterTemplateEdit = await page.locator("body").innerText();
+  if (!bodyTextAfterTemplateEdit.includes(editedTemplateTitle)) {
+    throw new Error("missing edited template title");
+  }
 
   const [firstJsonDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -149,13 +160,19 @@ try {
   await page.getByRole("button", { name: "生成迁移 demo" }).click();
   await page.waitForTimeout(3000);
   const bodyTextAfterTemplateRun = await page.locator("body").innerText();
-  if (!bodyTextAfterTemplateRun.includes(`Template: ${templateTitle}`)) {
+  if (!bodyTextAfterTemplateRun.includes(`Template: ${editedTemplateTitle}`)) {
     throw new Error("missing applied template state on current run");
   }
-  await page.getByLabel("按模板筛选").selectOption({ label: templateTitle });
+  if (!bodyTextAfterTemplateRun.includes("需求素材：夜景开场镜头")) {
+    throw new Error("missing edited required asset in regenerated preview");
+  }
+  if (!bodyTextAfterTemplateRun.includes("0-5s")) {
+    throw new Error("missing edited hook duration in regenerated preview");
+  }
+  await page.getByLabel("按模板筛选").selectOption({ label: editedTemplateTitle });
   await page.waitForTimeout(500);
   const bodyTextAfterTemplateFilter = await page.locator("body").innerText();
-  if (!bodyTextAfterTemplateFilter.includes(`模板 ${templateTitle}`)) {
+  if (!bodyTextAfterTemplateFilter.includes(`模板 ${editedTemplateTitle}`)) {
     throw new Error("missing template-filtered run badge");
   }
   await page.getByLabel("按模板筛选").selectOption("");
@@ -167,7 +184,7 @@ try {
   ]);
   const jsonDownloadPath = await jsonDownload.path();
   const jsonText = jsonDownloadPath ? await fs.readFile(jsonDownloadPath, "utf-8") : "";
-  if (!jsonText.includes(`\"template_title\": \"${templateTitle}\"`)) {
+  if (!jsonText.includes(`\"template_title\": \"${editedTemplateTitle}\"`)) {
     throw new Error("missing persisted template title in exported json");
   }
 
@@ -212,7 +229,7 @@ try {
 
   const templateCard = page
     .locator("article")
-    .filter({ hasText: templateTitle })
+    .filter({ hasText: editedTemplateTitle })
     .filter({ has: page.getByRole("button", { name: "删除模板" }) })
     .first();
   await templateCard.getByRole("button", { name: "删除模板" }).click();
