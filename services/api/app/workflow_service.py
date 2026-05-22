@@ -10,13 +10,18 @@ from app.models import (
     RenderDemoResponse,
     RunTraceEvent,
     StructurePreviewRequest,
+    TemplateStructure,
 )
 from app.run_record_service import save_demo_run_record
 from app.render_service import render_demo_video
 from app.structure_service import build_structure_preview
 
 
-def create_demo_run(request: StructurePreviewRequest, runs_dir: Optional[Path] = None) -> DemoRunResponse:
+def create_demo_run(
+    request: StructurePreviewRequest,
+    runs_dir: Optional[Path] = None,
+    template_override: Optional[TemplateStructure] = None,
+) -> DemoRunResponse:
     run_id = f"demo-{uuid4().hex[:8]}"
     created_at = datetime.now(timezone.utc).isoformat()
     trace = [
@@ -31,6 +36,7 @@ def create_demo_run(request: StructurePreviewRequest, runs_dir: Optional[Path] =
     preview = build_structure_preview(
         request.sample,
         request.content,
+        template_override=template_override,
         mapping_overrides=request.mapping_overrides,
         material_request_sheet=request.material_request_sheet,
     )

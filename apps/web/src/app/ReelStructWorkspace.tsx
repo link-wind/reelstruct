@@ -128,6 +128,15 @@ type RunRecordSummary = {
   note: string
 }
 
+type StructureTemplateSummary = {
+  template_id: string
+  created_at: string
+  source_run_id: string
+  title: string
+  slot_count: number
+  rhythm_summary: string
+}
+
 type RunStatusFilter = 'all' | 'succeeded'
 
 type SampleVideoInput = {
@@ -223,6 +232,8 @@ export default function ReelStructWorkspace() {
   const [requestSheetStatus, setRequestSheetStatus] = useState<Record<string, MaterialTaskStatus>>({})
   const [requestSheetFeedback, setRequestSheetFeedback] = useState('')
   const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
+  const [templates, setTemplates] = useState<StructureTemplateSummary[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
   const [runSearchKeyword, setRunSearchKeyword] = useState('')
   const [runNoteDraft, setRunNoteDraft] = useState('')
@@ -250,6 +261,10 @@ export default function ReelStructWorkspace() {
     return buildMaterialRequestSheetText(requestSheetGaps, requestSheetStatus)
   }, [requestSheetGaps, requestSheetStatus])
 
+  const selectedTemplate = useMemo(() => {
+    return templates.find((item) => item.template_id === selectedTemplateId) || null
+  }, [templates, selectedTemplateId])
+
   useEffect(() => {
     const nextGapIds = (preview?.transfer_plan.gaps || []).map((gap) => gap.slot_id)
     const nextRequestSheet = preview?.transfer_plan.material_request_sheet || []
@@ -272,6 +287,10 @@ export default function ReelStructWorkspace() {
   useEffect(() => {
     void fetchRecentRuns()
   }, [runStatusFilter, runSearchKeyword])
+
+  useEffect(() => {
+    void fetchTemplates()
+  }, [])
 
   const uploadSample = async (file: File | null) => {
     if (!file) return
@@ -344,6 +363,7 @@ export default function ReelStructWorkspace() {
         body: {
           sample,
           content,
+          template_id: selectedTemplateId,
           mapping_overrides,
           material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
         },
@@ -378,6 +398,22 @@ export default function ReelStructWorkspace() {
       setRecentRuns(runs)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '读取记录失败')
+    }
+  }
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await fetch('/api/templates')
+      if (!response.ok) {
+        throw new Error(`读取模板失败：${response.status}`)
+      }
+      const records = (await response.json()) as StructureTemplateSummary[]
+      setTemplates(records)
+      if (selectedTemplateId && !records.some((item) => item.template_id === selectedTemplateId)) {
+        setSelectedTemplateId('')
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '读取模板失败')
     }
   }
 
@@ -543,6 +579,24 @@ export default function ReelStructWorkspace() {
       setStatus(payload.pinned ? 'run 已置顶' : 'run 已取消置顶')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '置顶记录失败')
+    }
+  }
+
+  const saveRunAsTemplate = async () => {
+    if (!run) return
+    try {
+      const response = await fetch(`/api/templates/from-run/${run.run_id}`, {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        throw new Error(`保存模板失败：${response.status}`)
+      }
+      const payload = (await response.json()) as StructureTemplateSummary
+      setSelectedTemplateId(payload.template_id)
+      await fetchTemplates()
+      setStatus('已保存模板')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '保存模板失败')
     }
   }
 
@@ -917,6 +971,7 @@ export default function ReelStructWorkspace() {
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
             <p>Pinned: {run?.pinned ? '已置顶' : '未置顶'}</p>
+            <p>Template: {selectedTemplate?.title || '默认样例结构'}</p>
           </div>
 
           <div className="mt-3 grid gap-2">
@@ -945,6 +1000,14 @@ export default function ReelStructWorkspace() {
               type="button"
             >
               {run?.pinned ? '取消置顶' : '置顶记录'}
+            </button>
+            <button
+              className="w-fit rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+              onClick={saveRunAsTemplate}
+              disabled={!run}
+              type="button"
+            >
+              保存为模板
             </button>
             {run?.note ? <p className="text-sm leading-6 text-slate-700">{run.note}</p> : null}
           </div>
@@ -997,6 +1060,71 @@ export default function ReelStructWorkspace() {
             >
               只看成功
             </button>
+          </div>
+
+          <div className="mt-5 border-t border-line pt-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-signal">结构模板库</p>
+                <h3 className="mt-1 text-lg font-semibold">保存可复用结构</h3>
+              </div>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                {templates.length} 条
+              </span>
+            </div>
+            <div className="mt-4 rounded-md border border-line bg-slate-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">当前使用模板</p>
+                  <p className="mt-1 text-sm font-medium text-slate-800">
+                    {selectedTemplate ? selectedTemplate.title : '默认样例结构'}
+                  </p>
+                </div>
+                <button
+                  className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+                  onClick={() => setSelectedTemplateId('')}
+                  disabled={!selectedTemplateId}
+                  type="button"
+                >
+                  使用默认样例结构
+                </button>
+              </div>
+            </div>
+            {templates.length ? (
+              <div className="mt-4 grid gap-3">
+                {templates.slice(0, 5).map((item) => (
+                  <article key={item.template_id} className="rounded-md border border-line bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <strong className="text-sm">{item.title}</strong>
+                        <p className="mt-1 text-xs text-slate-500">{item.template_id}</p>
+                      </div>
+                      <button
+                        className={
+                          item.template_id === selectedTemplateId
+                            ? 'rounded-md bg-ink px-3 py-2 text-xs font-medium text-white'
+                            : 'rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700'
+                        }
+                        onClick={() => setSelectedTemplateId(item.template_id)}
+                        type="button"
+                      >
+                        {item.template_id === selectedTemplateId ? '当前使用' : '使用这个模板'}
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                      <span className="rounded-full bg-white px-2.5 py-1">槽位 {item.slot_count}</span>
+                      <span className="rounded-full bg-white px-2.5 py-1">来源 {item.source_run_id}</span>
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-slate-600">{item.rhythm_summary}</p>
+                    <p className="mt-2 text-xs text-slate-500">{formatRunTime(item.created_at)}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                先生成一个 run，再把当前结构保存成模板。
+              </p>
+            )}
           </div>
 
           <div className="mt-5 border-t border-line pt-5">

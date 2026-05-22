@@ -108,6 +108,18 @@ try {
   if (!bodyTextAfterPin.includes("已置顶")) {
     throw new Error("missing pinned run state");
   }
+  await page.getByRole("button", { name: "保存为模板" }).click();
+  await page.waitForTimeout(500);
+  const bodyTextAfterTemplateSave = await page.locator("body").innerText();
+  if (!bodyTextAfterTemplateSave.includes("结构模板库")) {
+    throw new Error("missing template library panel");
+  }
+  if (!bodyTextAfterTemplateSave.includes("当前使用模板")) {
+    throw new Error("missing active template state");
+  }
+  if (!bodyTextAfterTemplateSave.includes("咖啡拉花爆款样例 的可迁移结构")) {
+    throw new Error("missing saved template title");
+  }
 
   const [jsonDownload] = await Promise.all([
     page.waitForEvent("download"),

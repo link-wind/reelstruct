@@ -179,9 +179,26 @@ class RunPinUpdateRequest(BaseModel):
     pinned: bool = False
 
 
+class StructureTemplateSummary(BaseModel):
+    template_id: str
+    created_at: str = ""
+    source_run_id: str = ""
+    title: str
+    slot_count: int = 0
+    rhythm_summary: str = ""
+
+
+class StructureTemplateRecord(BaseModel):
+    template_id: str
+    created_at: str = ""
+    source_run_id: str = ""
+    template: TemplateStructure
+
+
 class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput
+    template_id: str = ""
     mapping_overrides: list[TransferMappingOverride] = Field(default_factory=list)
     material_request_sheet: list[MaterialRequestTask] = Field(default_factory=list)
 

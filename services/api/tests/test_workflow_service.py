@@ -380,3 +380,65 @@ def test_pin_saved_demo_run_moves_it_to_top():
     runs = list_response.json()
     assert runs[0]["run_id"] == first_run_id
     assert runs[0]["pinned"] is True
+
+
+def test_save_run_as_template_and_apply_it_to_new_demo_run():
+    client = TestClient(app)
+
+    first_run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "咖啡模板来源样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先用拉花特写吸引注意。再展示手作过程和门店氛围。最后引导到店打卡。",
+            },
+            "content": {
+                "topic": "咖啡店开业短视频",
+                "product_name": "巷口手作咖啡",
+                "selling_points": ["手作拉花", "新店开业优惠"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert first_run_response.status_code == 200
+    first_run = first_run_response.json()
+    source_run_id = first_run["run_id"]
+
+    save_template_response = client.post(f"/api/templates/from-run/{source_run_id}")
+    list_templates_response = client.get("/api/templates")
+
+    assert save_template_response.status_code == 200
+    saved_template = save_template_response.json()
+    assert saved_template["source_run_id"] == source_run_id
+    assert any(item["template_id"] == saved_template["template_id"] for item in list_templates_response.json())
+
+    second_run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "完全不同的样例",
+                "duration": 36,
+                "shot_count": 11,
+                "transcript_summary": "这个样例只用来带素材和文本，不该再决定结构时长。",
+            },
+            "content": {
+                "topic": "新店开业短视频",
+                "product_name": "夜巷咖啡",
+                "selling_points": ["深夜营业", "办公友好"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "template_id": saved_template["template_id"],
+        },
+    )
+
+    assert second_run_response.status_code == 200
+    second_run = second_run_response.json()
+    first_slot_lookup = {slot["id"]: slot for slot in first_run["preview"]["template"]["script_pattern"]}
+    second_slot_lookup = {slot["id"]: slot for slot in second_run["preview"]["template"]["script_pattern"]}
+
+    assert second_run["preview"]["template"]["title"] == first_run["preview"]["template"]["title"]
+    assert second_slot_lookup["hook"]["duration"] == first_slot_lookup["hook"]["duration"]
+    assert second_slot_lookup["cta"]["start"] == first_slot_lookup["cta"]["start"]

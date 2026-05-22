@@ -22,10 +22,11 @@ from app.models import (
 def build_structure_preview(
     sample: SampleVideoInput,
     content: NewContentInput,
+    template_override: Optional[TemplateStructure] = None,
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
     material_request_sheet: Optional[list[MaterialRequestTask]] = None,
 ) -> StructurePreviewResponse:
-    template = extract_template_structure(sample)
+    template = template_override.model_copy(deep=True) if template_override is not None else extract_template_structure(sample)
     template = apply_slot_level_overrides(template, mapping_overrides)
     gaps = detect_material_gaps(template, content)
     transfer_plan = build_transfer_plan(

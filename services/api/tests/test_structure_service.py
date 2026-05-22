@@ -1,4 +1,13 @@
-from app.models import NewContentInput, SampleVideoInput, TransferMappingOverride
+from app.models import (
+    NewContentInput,
+    SampleAnalysisBeat,
+    SampleAnalysisMetric,
+    SampleAnalysisSummary,
+    SampleVideoInput,
+    StructureSlot,
+    TemplateStructure,
+    TransferMappingOverride,
+)
 from app.structure_service import build_structure_preview
 
 
@@ -128,3 +137,83 @@ def test_build_structure_preview_applies_slot_level_overrides():
 
     card_texts = [track.text for track in response.composition.tracks if track.type == "card"]
     assert "缺商品特写时，先上优惠卡片，再补环境镜头" in card_texts
+
+
+def test_build_structure_preview_can_use_saved_template_structure():
+    saved_template = TemplateStructure(
+        title="已保存的咖啡模板",
+        script_pattern=[
+            StructureSlot(
+                id="hook",
+                label="Hook",
+                start=0,
+                duration=4.0,
+                purpose="开头制造注意力",
+                required_asset="开头吸引镜头",
+                sample_evidence="模板里的开头依据",
+            ),
+            StructureSlot(
+                id="selling_points",
+                label="卖点展开",
+                start=4.0,
+                duration=8.0,
+                purpose="连续推进核心卖点",
+                required_asset="商品特写镜头",
+                sample_evidence="模板里的卖点依据",
+            ),
+            StructureSlot(
+                id="usage",
+                label="使用过程",
+                start=12.0,
+                duration=5.0,
+                purpose="展示真实使用语境",
+                required_asset="使用过程镜头",
+                sample_evidence="模板里的使用依据",
+            ),
+            StructureSlot(
+                id="cta",
+                label="CTA",
+                start=17.0,
+                duration=3.0,
+                purpose="收束行动号召",
+                required_asset="结尾 CTA 镜头",
+                sample_evidence="模板里的 CTA 依据",
+            ),
+        ],
+        rhythm_summary="4-8-5-3 的固定节奏",
+        packaging_notes=["模板包装点"],
+        analysis_summary=SampleAnalysisSummary(
+            headline="模板分析",
+            metrics=[SampleAnalysisMetric(label="时长", value="20.0s", detail="模板节奏")],
+            narrative_beats=[
+                SampleAnalysisBeat(slot_id="hook", label="Hook", evidence="模板里的开头依据"),
+                SampleAnalysisBeat(slot_id="selling_points", label="卖点展开", evidence="模板里的卖点依据"),
+                SampleAnalysisBeat(slot_id="usage", label="使用过程", evidence="模板里的使用依据"),
+                SampleAnalysisBeat(slot_id="cta", label="CTA", evidence="模板里的 CTA 依据"),
+            ],
+            packaging_signals=["模板包装点"],
+        ),
+    )
+
+    response = build_structure_preview(
+        sample=SampleVideoInput(
+            title="完全不同的样例",
+            duration=36,
+            shot_count=10,
+            transcript_summary="这段样例不该决定最终结构。",
+        ),
+        content=NewContentInput(
+            topic="咖啡店开业短视频",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        template_override=saved_template,
+    )
+
+    slot_lookup = {slot.id: slot for slot in response.template.script_pattern}
+    assert response.template.title == "已保存的咖啡模板"
+    assert response.template.rhythm_summary == "4-8-5-3 的固定节奏"
+    assert slot_lookup["hook"].duration == 4.0
+    assert slot_lookup["cta"].start == 17.0
+    assert response.composition.duration == 20.0
