@@ -169,6 +169,12 @@ class RunRecordSummary(BaseModel):
     note: str = ""
 
 
+class RunBatchResponse(BaseModel):
+    batch_id: str
+    preferred_run_id: str = ""
+    runs: list[RunRecordSummary] = Field(default_factory=list)
+
+
 class DemoRunResponse(BaseModel):
     run_id: str
     batch_id: str = ""

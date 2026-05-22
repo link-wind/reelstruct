@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from app.models import DemoRunResponse, RunRecordSummary
+from app.models import DemoRunResponse, RunBatchResponse, RunRecordSummary
 
 
 def save_demo_run_record(run: DemoRunResponse, runs_dir: Path) -> Path:
@@ -128,6 +128,30 @@ def list_demo_run_records(
             or needle in item.batch_id.lower()
         ]
     return items[:limit]
+
+
+def load_demo_run_batch(batch_id: str, runs_dir: Path) -> Optional[RunBatchResponse]:
+    batch_id = batch_id.strip()
+    if not batch_id:
+        return None
+
+    runs = [
+        item
+        for item in list_demo_run_records(runs_dir, limit=1000)
+        if item.batch_id == batch_id
+    ]
+    if not runs:
+        return None
+
+    variant_order = {
+        "standard": 0,
+        "high_click": 1,
+        "high_conversion": 2,
+        "fast_rhythm": 3,
+    }
+    runs.sort(key=lambda item: variant_order.get(item.variant, 99))
+    preferred_run_id = next((item.run_id for item in runs if item.preferred), "")
+    return RunBatchResponse(batch_id=batch_id, preferred_run_id=preferred_run_id, runs=runs)
 
 
 def _mtime_to_iso(path: Path) -> str:

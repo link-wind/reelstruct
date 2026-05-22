@@ -17,7 +17,7 @@ ReelStruct 是一个短视频结构迁移 MVP。它把样例视频拆成 Hook、
 - 默认版、高点击版、高转化版、高节奏版四种输出版本
 - 四版本摘要对比和批量生成真实 demo
 - run 记录管理：搜索、筛选、载入、删除、备注、置顶、首选版本
-- 批量生成结果支持 `batch_id` 分组，同一批次只保留一个首选版本
+- 批量生成结果支持 `batch_id` 分组、批次工作台对比，同一批次只保留一个首选版本
 - 结构模板库：从 run 保存模板、标签筛选、编辑、版本回退、复制、删除
 
 ## 核心流程
@@ -53,6 +53,7 @@ ReelStruct 是一个短视频结构迁移 MVP。它把样例视频拆成 Hook、
 - `POST /api/runs/demo-variants`：批量生成四个版本 demo，并写入同一个 `batch_id`
 - `GET /api/runs`：读取最近 run 记录，支持搜索、状态、模板、标签筛选
 - `GET /api/runs/{run_id}`：读取 run 详情
+- `GET /api/runs/batches/{batch_id}`：读取同批次四个版本摘要和首选状态
 - `PATCH /api/runs/{run_id}/note`：保存 run 备注
 - `PATCH /api/runs/{run_id}/pin`：置顶 / 取消置顶
 - `PATCH /api/runs/{run_id}/preferred`：设为首选 / 取消首选；同批次只保留一个首选
@@ -101,7 +102,7 @@ npm run dev
 3. 编辑目标主题、商品名、卖点和已有素材
 4. 点击“生成版本对比”查看四种版本摘要
 5. 点击“批量生成四版 demo”
-6. 在最近 run 记录里比较 Hook、CTA、时长、缺口和视频结果
+6. 在批次工作台或最近 run 记录里比较 Hook、CTA、时长、缺口和视频结果
 7. 点击“设为首选”确定同批次最终版本
 8. 可把满意 run 保存为结构模板
 ```

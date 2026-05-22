@@ -148,6 +148,12 @@ type RunRecordSummary = {
   note: string
 }
 
+type RunBatchResponse = {
+  batch_id: string
+  preferred_run_id: string
+  runs: RunRecordSummary[]
+}
+
 type StructureVariantSummary = {
   variant: OutputVariant
   title: string
@@ -308,6 +314,7 @@ export default function ReelStructWorkspace() {
   const [requestSheetStatus, setRequestSheetStatus] = useState<Record<string, MaterialTaskStatus>>({})
   const [requestSheetFeedback, setRequestSheetFeedback] = useState('')
   const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
+  const [runBatch, setRunBatch] = useState<RunBatchResponse | null>(null)
   const [templates, setTemplates] = useState<StructureTemplateSummary[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [selectedTemplateDetail, setSelectedTemplateDetail] = useState<StructureTemplateRecord | null>(null)
@@ -362,6 +369,14 @@ export default function ReelStructWorkspace() {
   useEffect(() => {
     setRunNoteDraft(run?.note ?? '')
   }, [run])
+
+  useEffect(() => {
+    if (!run?.batch_id) {
+      setRunBatch(null)
+      return
+    }
+    void fetchRunBatch(run.batch_id)
+  }, [run?.batch_id])
 
   useEffect(() => {
     if (!requestSheetFeedback) return
@@ -462,6 +477,7 @@ export default function ReelStructWorkspace() {
     setStatus('正在执行迁移任务')
     setVideoUrl('')
     setRun(null)
+    setRunBatch(null)
 
     try {
       const mapping_overrides =
@@ -496,6 +512,7 @@ export default function ReelStructWorkspace() {
     setStatus('正在批量生成四版 demo')
     setVideoUrl('')
     setRun(null)
+    setRunBatch(null)
 
     try {
       const mapping_overrides = preview ? buildMappingOverrides(preview, slotDrafts) : []
@@ -515,6 +532,7 @@ export default function ReelStructWorkspace() {
       setPreview(selectedRun.preview)
       setSlotDrafts(buildSlotDrafts(selectedRun.preview))
       setVideoUrl(`${selectedRun.rendered_video.video_url}?t=${Date.now()}`)
+      await fetchRunBatch(selectedRun.batch_id)
       await fetchRecentRuns()
       setStatus('四版 demo 已生成')
     } catch (caught) {
@@ -569,6 +587,24 @@ export default function ReelStructWorkspace() {
       setRecentRuns(runs)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '读取记录失败')
+    }
+  }
+
+  const fetchRunBatch = async (batchId: string) => {
+    if (!batchId) return
+    try {
+      const response = await fetch(`/api/runs/batches/${batchId}`)
+      if (!response.ok) {
+        if (response.status === 404) {
+          setRunBatch(null)
+          return
+        }
+        throw new Error(`读取批次失败：${response.status}`)
+      }
+      const batch = (await response.json()) as RunBatchResponse
+      setRunBatch(batch)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '读取批次失败')
     }
   }
 
@@ -805,6 +841,11 @@ export default function ReelStructWorkspace() {
       const payload = (await response.json()) as DemoRunResponse
       if (run?.run_id === payload.run_id) {
         setRun(payload)
+      } else if (run?.batch_id === payload.batch_id && payload.preferred) {
+        setRun({ ...run, preferred: false })
+      }
+      if (payload.batch_id) {
+        await fetchRunBatch(payload.batch_id)
       }
       await fetchRecentRuns()
       setStatus(payload.preferred ? '已设为首选版本' : '已取消首选版本')
@@ -1422,6 +1463,86 @@ export default function ReelStructWorkspace() {
             <p>Template: {run?.template_title || selectedTemplate?.title || '默认样例结构'}</p>
             <p>Tags: {(run?.template_tags.length ? run.template_tags : selectedTemplate?.tags || []).join(' / ') || '--'}</p>
           </div>
+
+          {runBatch ? (
+            <div className="mt-4 rounded-md border border-line bg-slate-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-signal">批次工作台</p>
+                  <h3 className="mt-1 text-lg font-semibold">四版批次对比</h3>
+                  <p className="mt-1 text-xs text-slate-500">{runBatch.batch_id}</p>
+                </div>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                  {runBatch.runs.length} 个版本
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3">
+                {runBatch.runs.map((item) => {
+                  const isCurrentRun = item.run_id === run?.run_id
+                  return (
+                    <article
+                      key={`batch-${item.run_id}`}
+                      className={`rounded-md border p-3 ${
+                        isCurrentRun ? 'border-signal bg-white' : 'border-line bg-white/70'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="text-sm">{variantLabel(item.variant)}</strong>
+                            {item.preferred ? (
+                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                                首选版本
+                              </span>
+                            ) : null}
+                            {isCurrentRun ? (
+                              <span className="rounded-full bg-ink px-2.5 py-1 text-xs font-medium text-white">
+                                当前预览
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">{item.run_id}</p>
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                          {item.duration}s
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 rounded-md bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+                        <p>
+                          <span className="font-semibold text-slate-700">Hook：</span>
+                          {item.hook || '--'}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-slate-700">CTA：</span>
+                          {item.cta || '--'}
+                        </p>
+                        <p>
+                          缺口 {item.gap_count} / 需求单 {item.material_request_count}
+                        </p>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+                          onClick={() => void loadRunRecord(item.run_id)}
+                          disabled={isCurrentRun}
+                          type="button"
+                        >
+                          {isCurrentRun ? '正在预览' : '载入这个版本'}
+                        </button>
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                          onClick={() => void toggleRunPreferred(item.run_id, item.preferred)}
+                          type="button"
+                        >
+                          {item.preferred ? '取消首选' : '设为首选'}
+                        </button>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div className="mt-3 grid gap-2">
             <label className="grid gap-2 text-xs font-medium text-slate-700">

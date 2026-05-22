@@ -52,6 +52,9 @@ try {
   if (!bodyTextAfterBatchRun.includes("Batch: batch-")) {
     throw new Error("missing batch id in current preview");
   }
+  if (!bodyTextAfterBatchRun.includes("批次工作台")) {
+    throw new Error("missing batch workspace panel");
+  }
 
   await page.getByRole("button", { name: "全选缺口" }).click();
   await page.getByRole("button", { name: "加入需求单" }).click();

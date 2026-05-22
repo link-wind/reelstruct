@@ -13,6 +13,7 @@ from app.models import (
     PrepareDemoAssetsResponse,
     RenderClipPreview,
     RenderDemoResponse,
+    RunBatchResponse,
     RunPinUpdateRequest,
     RunPreferredUpdateRequest,
     RunNoteUpdateRequest,
@@ -31,6 +32,7 @@ from app.render_service import render_demo_video
 from app.run_record_service import (
     delete_demo_run_record,
     list_demo_run_records,
+    load_demo_run_batch,
     load_demo_run_record,
     update_demo_run_note,
     update_demo_run_pinned,
@@ -154,6 +156,14 @@ def get_run_record(run_id: str) -> DemoRunResponse:
     if record is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return record
+
+
+@app.get("/api/runs/batches/{batch_id}", response_model=RunBatchResponse)
+def get_run_batch(batch_id: str) -> RunBatchResponse:
+    batch = load_demo_run_batch(batch_id, RUNS_DIR)
+    if batch is None:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    return batch
 
 
 @app.delete("/api/runs/{run_id}", status_code=204)

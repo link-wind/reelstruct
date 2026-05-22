@@ -354,6 +354,51 @@ def test_mark_preferred_run_is_unique_within_batch():
     assert [item for item in batch_items if item["preferred"]][0]["run_id"] == second_run_id
 
 
+def test_get_demo_run_batch_returns_grouped_variant_summaries_and_preferred_run():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs/demo-variants",
+        json={
+            "sample": {
+                "title": "批次工作台样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "批次工作台短视频",
+                "product_name": "批次工作台门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    runs = response.json()["runs"]
+    batch_id = runs[0]["batch_id"]
+    preferred_run_id = runs[2]["run_id"]
+
+    preferred_response = client.patch(f"/api/runs/{preferred_run_id}/preferred", json={"preferred": True})
+    batch_response = client.get(f"/api/runs/batches/{batch_id}")
+
+    assert preferred_response.status_code == 200
+    assert batch_response.status_code == 200
+    body = batch_response.json()
+    assert body["batch_id"] == batch_id
+    assert body["preferred_run_id"] == preferred_run_id
+    assert [item["variant"] for item in body["runs"]] == [
+        "standard",
+        "high_click",
+        "high_conversion",
+        "fast_rhythm",
+    ]
+    assert {item["run_id"] for item in body["runs"]} == {item["run_id"] for item in runs}
+    assert sum(1 for item in body["runs"] if item["preferred"]) == 1
+    assert [item for item in body["runs"] if item["preferred"]][0]["run_id"] == preferred_run_id
+
+
 def test_get_saved_demo_run_returns_snapshot():
     client = TestClient(app)
 
