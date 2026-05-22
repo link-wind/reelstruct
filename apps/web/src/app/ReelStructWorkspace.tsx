@@ -29,6 +29,12 @@ type MaterialRequestTask = {
   status: MaterialTaskStatus
 }
 
+type MaterialRequestSheetItem = {
+  task: MaterialRequestTask
+  slot: StructureSlot
+  gap: MaterialGap | undefined
+}
+
 type TransferMapping = {
   slot_id: string
   source_label: string
@@ -345,13 +351,29 @@ export default function ReelStructWorkspace() {
     return (preview?.transfer_plan.gaps || []).filter((gap) => selectedGapIds.includes(gap.slot_id))
   }, [preview, selectedGapIds])
 
-  const requestSheetGaps = useMemo(() => {
-    return (preview?.transfer_plan.gaps || []).filter((gap) => requestSheetIds.includes(gap.slot_id))
-  }, [preview, requestSheetIds])
+  const requestSheetItems = useMemo(() => {
+    const slotLookup = new Map((preview?.template.script_pattern || []).map((slot) => [slot.id, slot]))
+    const serverTaskLookup = new Map((preview?.transfer_plan.material_request_sheet || []).map((task) => [task.slot_id, task]))
+    return requestSheetIds
+      .map((slotId) => {
+        const slot = slotLookup.get(slotId)
+        return slot
+          ? {
+              task: serverTaskLookup.get(slotId) || {
+                slot_id: slotId,
+                status: requestSheetStatus[slotId] ?? '待补拍',
+              },
+              slot,
+              gap: gapLookup.get(slotId),
+            }
+          : null
+      })
+      .filter((item): item is MaterialRequestSheetItem => Boolean(item))
+  }, [gapLookup, preview, requestSheetIds, requestSheetStatus])
 
   const requestSheetText = useMemo(() => {
-    return buildMaterialRequestSheetText(requestSheetGaps, requestSheetStatus)
-  }, [requestSheetGaps, requestSheetStatus])
+    return buildMaterialRequestSheetText(requestSheetItems, requestSheetStatus)
+  }, [requestSheetItems, requestSheetStatus])
 
   const selectedTemplate = useMemo(() => {
     return templates.find((item) => item.template_id === selectedTemplateId) || null
@@ -2145,7 +2167,7 @@ export default function ReelStructWorkspace() {
                   <button
                     className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
                     onClick={clearRequestSheet}
-                    disabled={!requestSheetGaps.length}
+                    disabled={!requestSheetItems.length}
                     type="button"
                   >
                     清空需求单
@@ -2153,7 +2175,7 @@ export default function ReelStructWorkspace() {
                   <button
                     className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
                     onClick={copyRequestSheet}
-                    disabled={!requestSheetGaps.length}
+                    disabled={!requestSheetItems.length}
                     type="button"
                   >
                     复制需求单
@@ -2161,61 +2183,71 @@ export default function ReelStructWorkspace() {
                   <button
                     className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
                     onClick={exportRequestSheet}
-                    disabled={!requestSheetGaps.length}
+                    disabled={!requestSheetItems.length}
                     type="button"
                   >
                     导出 txt
                   </button>
                 </div>
               </div>
-              {requestSheetGaps.length ? (
+              {requestSheetItems.length ? (
                 <div className="mt-4 grid gap-3">
-                  {requestSheetGaps.map((gap) => (
-                    <article key={gap.slot_id} className="rounded-md border border-line bg-slate-50 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <strong className="text-sm">{labelForSlot(gap.slot_id)}</strong>
-                          <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
-                            {gap.suggested_asset_type}
-                          </span>
-                          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
-                            当前状态：{requestSheetStatus[gap.slot_id] ?? '待补拍'}
-                          </span>
+                  {requestSheetItems.map((item) => {
+                    const status = requestSheetStatus[item.task.slot_id] ?? item.task.status
+                    return (
+                      <article key={item.task.slot_id} className="rounded-md border border-line bg-slate-50 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="text-sm">{labelForSlot(item.task.slot_id)}</strong>
+                            <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                              {item.gap?.suggested_asset_type || item.slot.required_asset}
+                            </span>
+                            <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                              当前状态：{status}
+                            </span>
+                            {!item.gap ? (
+                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                                已补齐素材
+                              </span>
+                            ) : null}
+                          </div>
+                          <button
+                            className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                            onClick={() => removeFromRequestSheet(item.task.slot_id)}
+                            type="button"
+                          >
+                            移出需求单
+                          </button>
                         </div>
-                        <button
-                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
-                          onClick={() => removeFromRequestSheet(gap.slot_id)}
-                          type="button"
-                        >
-                          移出需求单
-                        </button>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-700">{gap.fill_strategy}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {materialTaskStatuses.map((item) => {
-                          const active = (requestSheetStatus[gap.slot_id] ?? '待补拍') === item
-                          return (
-                            <button
-                              key={`${gap.slot_id}-${item}`}
-                              className={
-                                active
-                                  ? 'rounded-md bg-ink px-3 py-2 text-xs font-medium text-white'
-                                  : 'rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700'
-                              }
-                              onClick={() => updateMaterialTaskStatus(gap.slot_id, item)}
-                              type="button"
-                            >
-                              {item}
-                            </button>
-                          )
-                        })}
-                      </div>
-                      <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">需求摘要</p>
-                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
-                        {buildMaterialRequestSheetEntry(gap, requestSheetStatus[gap.slot_id] ?? '待补拍')}
-                      </p>
-                    </article>
-                  ))}
+                        <p className="mt-2 text-sm leading-6 text-slate-700">
+                          {item.gap?.fill_strategy || `已可使用素材：${item.slot.required_asset}`}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {materialTaskStatuses.map((nextStatus) => {
+                            const active = status === nextStatus
+                            return (
+                              <button
+                                key={`${item.task.slot_id}-${nextStatus}`}
+                                className={
+                                  active
+                                    ? 'rounded-md bg-ink px-3 py-2 text-xs font-medium text-white'
+                                    : 'rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700'
+                                }
+                                onClick={() => updateMaterialTaskStatus(item.task.slot_id, nextStatus)}
+                                type="button"
+                              >
+                                {nextStatus}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">需求摘要</p>
+                        <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
+                          {buildMaterialRequestSheetEntry(item, status)}
+                        </p>
+                      </article>
+                    )
+                  })}
                 </div>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-slate-600">
@@ -2358,7 +2390,15 @@ function variantLabel(variant: OutputVariant): string {
 
 const materialTaskStatuses: MaterialTaskStatus[] = ['待补拍', '已拍', '已交付']
 
-function buildMaterialRequestSheetEntry(gap: MaterialGap, status: MaterialTaskStatus): string {
+function buildMaterialRequestSheetEntry(item: MaterialRequestSheetItem, status: MaterialTaskStatus): string {
+  const gap = item.gap
+  if (!gap) {
+    return [
+      `当前状态：${status}`,
+      `已补齐素材：${item.slot.required_asset}`,
+      `补位方式：已进入可用素材池，重新生成时直接参与视频重组`,
+    ].join('\n')
+  }
   return [
     `当前状态：${status}`,
     `缺口素材：${gap.missing_asset}`,
@@ -2369,19 +2409,19 @@ function buildMaterialRequestSheetEntry(gap: MaterialGap, status: MaterialTaskSt
 }
 
 function buildMaterialRequestSheetText(
-  gaps: MaterialGap[],
+  items: MaterialRequestSheetItem[],
   statusLookup: Record<string, MaterialTaskStatus>,
 ): string {
-  if (!gaps.length) return ''
+  if (!items.length) return ''
   return [
     '素材需求单',
     '待执行素材任务',
     '',
-    ...gaps.flatMap((gap, index) => {
-      const status = statusLookup[gap.slot_id] ?? '待补拍'
+    ...items.flatMap((item, index) => {
+      const status = statusLookup[item.task.slot_id] ?? item.task.status
       return [
-        `${index + 1}. ${labelForSlot(gap.slot_id)} / ${gap.suggested_asset_type}`,
-        buildMaterialRequestSheetEntry(gap, status),
+        `${index + 1}. ${labelForSlot(item.task.slot_id)} / ${item.gap?.suggested_asset_type || item.slot.required_asset}`,
+        buildMaterialRequestSheetEntry(item, status),
         '',
       ]
     }),

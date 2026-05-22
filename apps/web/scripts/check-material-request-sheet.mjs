@@ -109,6 +109,12 @@ try {
   if (!rerunBodyText.includes("当前状态：已拍")) {
     throw new Error("missing persisted request sheet status after rerun");
   }
+  if (!rerunBodyText.includes("Gaps: 1")) {
+    throw new Error("missing reduced gap count after delivered material rerun");
+  }
+  if (!rerunBodyText.includes("已补齐素材")) {
+    throw new Error("missing delivered material state after rerun");
+  }
   if ((await page.locator('text=/demo-[a-z0-9]{8}/').count()) < 2) {
     throw new Error("missing recent run summary content");
   }

@@ -1,4 +1,5 @@
 from app.models import (
+    MaterialRequestTask,
     NewContentInput,
     SampleAnalysisBeat,
     SampleAnalysisMetric,
@@ -50,6 +51,33 @@ def test_build_structure_preview_uses_existing_assets_when_available():
 
     assert response.transfer_plan.gaps == []
     assert all("使用已有素材" in mapping.asset_strategy for mapping in response.transfer_plan.mappings)
+
+
+def test_build_structure_preview_treats_delivered_material_tasks_as_available_assets():
+    response = build_structure_preview(
+        sample=SampleVideoInput(title="咖啡样例", duration=20, shot_count=6),
+        content=NewContentInput(
+            topic="咖啡店开业",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        material_request_sheet=[
+            MaterialRequestTask(slot_id="selling_points", status="已拍"),
+            MaterialRequestTask(slot_id="cta", status="待补拍"),
+        ],
+    )
+
+    gap_lookup = {gap.slot_id: gap for gap in response.transfer_plan.gaps}
+    mapping_lookup = {mapping.slot_id: mapping for mapping in response.transfer_plan.mappings}
+
+    assert set(gap_lookup) == {"cta"}
+    assert mapping_lookup["selling_points"].asset_strategy == "使用已有素材：商品特写镜头"
+    assert "卡片" not in mapping_lookup["selling_points"].asset_strategy
+    assert response.transfer_plan.material_request_sheet == [
+        MaterialRequestTask(slot_id="selling_points", status="已拍"),
+        MaterialRequestTask(slot_id="cta", status="待补拍"),
+    ]
 
 
 def test_build_structure_preview_uses_transcript_summary_for_hook_and_cta_evidence():
