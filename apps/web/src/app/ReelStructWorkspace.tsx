@@ -796,6 +796,28 @@ export default function ReelStructWorkspace() {
     }
   }
 
+  const forkTemplate = async (templateId: string, title: string) => {
+    try {
+      const response = await fetch(`/api/templates/${templateId}/fork`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title }),
+      })
+      if (!response.ok) {
+        throw new Error(`复制模板失败：${response.status}`)
+      }
+      const record = (await response.json()) as StructureTemplateRecord
+      await fetchTemplates()
+      setSelectedTemplateId(record.template_id)
+      setTemplateNameDraft(record.template.title)
+      setStatus('模板已复制')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '复制模板失败')
+    }
+  }
+
   return (
     <main className="min-h-screen bg-paper text-ink">
       <section className="border-b border-line bg-white">
@@ -1332,6 +1354,13 @@ export default function ReelStructWorkspace() {
                           type="button"
                         >
                           {item.template_id === selectedTemplateId ? '当前使用' : '使用这个模板'}
+                        </button>
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                          onClick={() => void forkTemplate(item.template_id, `${item.title} 副本`)}
+                          type="button"
+                        >
+                          复制模板
                         </button>
                         <button
                           className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-coral"

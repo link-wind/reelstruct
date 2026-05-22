@@ -119,6 +119,29 @@ def rollback_structure_template_record(
     return updated
 
 
+def fork_structure_template_record(
+    template_id: str,
+    title: str,
+    templates_dir: Path,
+) -> Optional[StructureTemplateRecord]:
+    record = load_structure_template_record(template_id, templates_dir)
+    if record is None:
+        return None
+
+    forked = StructureTemplateRecord(
+        template_id=f"tpl-{uuid4().hex[:8]}",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        source_run_id=record.source_run_id,
+        template=record.template.model_copy(
+            deep=True,
+            update={"title": title.strip() or f"{record.template.title} 副本"},
+        ),
+        versions=[],
+    )
+    save_structure_template_record(forked, templates_dir)
+    return forked
+
+
 def list_structure_template_records(templates_dir: Path, limit: int = 20) -> list[StructureTemplateSummary]:
     records: list[StructureTemplateRecord] = []
     for path in templates_dir.glob("*.json"):

@@ -183,10 +183,22 @@ try {
   if (!bodyTextAfterRollback.includes(templateTitle)) {
     throw new Error("missing rolled back template title");
   }
+  const forkedTemplateTitle = `${templateTitle} 副本`;
+  const baseTemplateCard = page
+    .locator("article")
+    .filter({ hasText: templateTitle })
+    .filter({ has: page.getByRole("button", { name: "复制模板" }) })
+    .first();
+  await baseTemplateCard.getByRole("button", { name: "复制模板" }).click();
+  await page.waitForTimeout(500);
+  const bodyTextAfterFork = await page.locator("body").innerText();
+  if (!bodyTextAfterFork.includes(forkedTemplateTitle)) {
+    throw new Error("missing forked template title");
+  }
   await page.getByRole("button", { name: "生成迁移 demo" }).click();
   await page.waitForTimeout(3000);
   const bodyTextAfterRollbackRun = await page.locator("body").innerText();
-  if (!bodyTextAfterRollbackRun.includes(`Template: ${templateTitle}`)) {
+  if (!bodyTextAfterRollbackRun.includes(`Template: ${forkedTemplateTitle}`)) {
     throw new Error("missing rolled back template state on current run");
   }
 
@@ -196,7 +208,7 @@ try {
   ]);
   const jsonDownloadPath = await jsonDownload.path();
   const jsonText = jsonDownloadPath ? await fs.readFile(jsonDownloadPath, "utf-8") : "";
-  if (!jsonText.includes(`\"template_title\": \"${templateTitle}\"`)) {
+  if (!jsonText.includes(`\"template_title\": \"${forkedTemplateTitle}\"`)) {
     throw new Error("missing persisted template title in exported json");
   }
 
@@ -241,13 +253,24 @@ try {
 
   const templateCard = page
     .locator("article")
-    .filter({ hasText: templateTitle })
+    .filter({ hasText: forkedTemplateTitle })
     .filter({ has: page.getByRole("button", { name: "删除模板" }) })
     .first();
   await templateCard.getByRole("button", { name: "删除模板" }).click();
   await page.waitForTimeout(500);
   if ((await templateCard.count()) !== 0) {
     throw new Error("deleted template card still visible");
+  }
+
+  const originalTemplateCard = page
+    .locator("article")
+    .filter({ hasText: templateTitle })
+    .filter({ has: page.getByRole("button", { name: "删除模板" }) })
+    .first();
+  await originalTemplateCard.getByRole("button", { name: "删除模板" }).click();
+  await page.waitForTimeout(500);
+  if ((await originalTemplateCard.count()) !== 0) {
+    throw new Error("deleted original template card still visible");
   }
 
   await page.getByRole("button", { name: "清空需求单" }).click();

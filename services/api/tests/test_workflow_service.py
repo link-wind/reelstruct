@@ -716,3 +716,78 @@ def test_template_update_creates_version_and_can_rollback():
     assert slot_lookup["hook"]["duration"] == 4.0
     assert slot_lookup["hook"]["required_asset"] == "开头吸引镜头"
     assert len(rolled_back["versions"]) >= 2
+
+
+def test_fork_template_creates_independent_copy():
+    client = TestClient(app)
+
+    run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "复制来源样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "复制测试短视频",
+                "product_name": "复制测试门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert run_response.status_code == 200
+    run_id = run_response.json()["run_id"]
+
+    save_response = client.post(f"/api/templates/from-run/{run_id}", json={"title": "母模板"})
+    assert save_response.status_code == 200
+    template_id = save_response.json()["template_id"]
+
+    update_response = client.patch(
+        f"/api/templates/{template_id}",
+        json={
+            "title": "夜咖母模板",
+            "rhythm_summary": "5-7-5-3",
+            "slots": [
+                {"slot_id": "hook", "duration": 5.0, "required_asset": "夜景开场镜头"},
+            ],
+        },
+    )
+    assert update_response.status_code == 200
+
+    fork_response = client.post(f"/api/templates/{template_id}/fork", json={"title": "夜咖母模板 副本"})
+    list_response = client.get("/api/templates")
+
+    assert fork_response.status_code == 200
+    forked = fork_response.json()
+    assert forked["template_id"] != template_id
+    assert forked["template"]["title"] == "夜咖母模板 副本"
+    assert forked["template"]["rhythm_summary"] == "5-7-5-3"
+    assert forked["versions"] == []
+    fork_slot_lookup = {slot["id"]: slot for slot in forked["template"]["script_pattern"]}
+    assert fork_slot_lookup["hook"]["duration"] == 5.0
+    assert fork_slot_lookup["hook"]["required_asset"] == "夜景开场镜头"
+    assert any(item["template_id"] == forked["template_id"] for item in list_response.json())
+
+    mutate_fork_response = client.patch(
+        f"/api/templates/{forked['template_id']}",
+        json={
+            "title": "餐饮门店模板",
+            "rhythm_summary": "4-8-4-4",
+            "slots": [
+                {"slot_id": "hook", "duration": 4.0, "required_asset": "门店招牌镜头"},
+            ],
+        },
+    )
+    original_detail_response = client.get(f"/api/templates/{template_id}")
+
+    assert mutate_fork_response.status_code == 200
+    assert original_detail_response.status_code == 200
+    original = original_detail_response.json()
+    original_slot_lookup = {slot["id"]: slot for slot in original["template"]["script_pattern"]}
+    assert original["template"]["title"] == "夜咖母模板"
+    assert original_slot_lookup["hook"]["duration"] == 5.0
+    assert original_slot_lookup["hook"]["required_asset"] == "夜景开场镜头"

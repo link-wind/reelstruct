@@ -35,6 +35,7 @@ from app.structure_service import build_structure_preview
 from app.template_record_service import (
     create_structure_template_from_run,
     delete_structure_template_record,
+    fork_structure_template_record,
     list_structure_template_records,
     load_structure_template_record,
     rollback_structure_template_record,
@@ -158,6 +159,14 @@ def rollback_template(template_id: str, version_id: str) -> StructureTemplateRec
     record = rollback_structure_template_record(template_id, version_id, TEMPLATES_DIR)
     if record is None:
         raise HTTPException(status_code=404, detail="Template version not found")
+    return record
+
+
+@app.post("/api/templates/{template_id}/fork", response_model=StructureTemplateRecord)
+def fork_template(template_id: str, request: CreateTemplateFromRunRequest) -> StructureTemplateRecord:
+    record = fork_structure_template_record(template_id, request.title, TEMPLATES_DIR)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Template not found")
     return record
 
 
