@@ -244,3 +244,17 @@ class StructurePreviewResponse(BaseModel):
     template: TemplateStructure
     transfer_plan: TransferPlan
     composition: CompositionSpec
+
+
+class StructureVariantSummary(BaseModel):
+    variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"]
+    title: str
+    duration: float
+    hook: str
+    cta: str
+    gap_count: int = 0
+    rhythm_summary: str = ""
+
+
+class StructureVariantsResponse(BaseModel):
+    variants: list[StructureVariantSummary]

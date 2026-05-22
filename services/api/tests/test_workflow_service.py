@@ -168,6 +168,40 @@ def test_create_demo_run_persists_output_variant_to_detail_and_list():
     assert any(item["run_id"] == run_id and item["variant"] == "high_click" for item in list_response.json())
 
 
+def test_compare_structure_variants_returns_all_output_options():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/structure/variants",
+        json={
+            "sample": {
+                "title": "版本对比样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "版本对比短视频",
+                "product_name": "版本对比门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    variants = body["variants"]
+    assert [item["variant"] for item in variants] == ["standard", "high_click", "high_conversion", "fast_rhythm"]
+    variant_lookup = {item["variant"]: item for item in variants}
+    assert variant_lookup["standard"]["title"] == "版本对比门店 结构迁移方案"
+    assert "高点击版" in variant_lookup["high_click"]["title"]
+    assert "前 2 秒" in variant_lookup["high_click"]["hook"]
+    assert "行动理由" in variant_lookup["high_conversion"]["cta"]
+    assert variant_lookup["fast_rhythm"]["duration"] < variant_lookup["standard"]["duration"]
+    assert variant_lookup["standard"]["gap_count"] == 2
+
+
 def test_get_saved_demo_run_returns_snapshot():
     client = TestClient(app)
 

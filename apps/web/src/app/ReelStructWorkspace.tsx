@@ -137,6 +137,20 @@ type RunRecordSummary = {
   note: string
 }
 
+type StructureVariantSummary = {
+  variant: OutputVariant
+  title: string
+  duration: number
+  hook: string
+  cta: string
+  gap_count: number
+  rhythm_summary: string
+}
+
+type StructureVariantsResponse = {
+  variants: StructureVariantSummary[]
+}
+
 type StructureTemplateRecord = {
   template_id: string
   created_at: string
@@ -293,6 +307,7 @@ export default function ReelStructWorkspace() {
   const [runTemplateFilter, setRunTemplateFilter] = useState('')
   const [runTagFilter, setRunTagFilter] = useState('')
   const [outputVariant, setOutputVariant] = useState<OutputVariant>('standard')
+  const [variantSummaries, setVariantSummaries] = useState<StructureVariantSummary[]>([])
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
   const [runSearchKeyword, setRunSearchKeyword] = useState('')
   const [runNoteDraft, setRunNoteDraft] = useState('')
@@ -462,6 +477,28 @@ export default function ReelStructWorkspace() {
     } catch (caught) {
       setStatus('生成失败')
       setError(caught instanceof Error ? caught.message : '未知错误')
+    }
+  }
+
+  const compareOutputVariants = async () => {
+    setError('')
+    setStatus('正在生成版本对比')
+    try {
+      const payload = await requestJson<StructureVariantsResponse>('/api/structure/variants', {
+        method: 'POST',
+        body: {
+          sample,
+          content,
+          template_id: selectedTemplateId,
+          mapping_overrides: preview ? buildMappingOverrides(preview, slotDrafts) : [],
+          material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
+        },
+      })
+      setVariantSummaries(payload.variants)
+      setStatus('版本对比已生成')
+    } catch (caught) {
+      setStatus('版本对比失败')
+      setError(caught instanceof Error ? caught.message : '版本对比失败')
     }
   }
 
@@ -1031,21 +1068,77 @@ export default function ReelStructWorkspace() {
                 onChange={(event) => setContent({ ...content, available_assets: splitList(event.target.value) })}
               />
             </label>
-            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
-              输出版本
-              <select
-                aria-label="输出版本"
-                className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-signal"
-                value={outputVariant}
-                onChange={(event) => setOutputVariant(event.target.value as OutputVariant)}
-              >
-                {outputVariants.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="grid gap-3 md:col-span-2">
+              <div className="grid gap-2 text-sm font-medium text-slate-700">
+                <label htmlFor="output-variant">输出版本</label>
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <select
+                    id="output-variant"
+                    aria-label="输出版本"
+                    className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                    value={outputVariant}
+                    onChange={(event) => setOutputVariant(event.target.value as OutputVariant)}
+                  >
+                    {outputVariants.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="rounded-md border border-line px-3 py-2 text-sm font-medium text-slate-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                    onClick={compareOutputVariants}
+                    disabled={status === '正在生成版本对比' || status === '正在执行迁移任务'}
+                    type="button"
+                  >
+                    生成版本对比
+                  </button>
+                </div>
+              </div>
+
+              {variantSummaries.length > 0 ? (
+                <div className="grid gap-3 lg:grid-cols-4">
+                  {variantSummaries.map((item) => {
+                    const isActive = item.variant === outputVariant
+                    return (
+                      <article
+                        key={item.variant}
+                        className={`grid gap-3 rounded-md border p-3 text-sm ${
+                          isActive ? 'border-signal bg-sky-50' : 'border-line bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-semibold text-ink">{variantLabel(item.variant)}</p>
+                            <p className="mt-1 text-xs text-slate-500">{item.rhythm_summary}</p>
+                          </div>
+                          <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-600">
+                            {item.duration}s
+                          </span>
+                        </div>
+                        <div className="grid gap-2 text-xs leading-5 text-slate-600">
+                          <p className="font-medium text-slate-700">{item.title}</p>
+                          <p>Hook：{item.hook}</p>
+                          <p>CTA：{item.cta}</p>
+                          <p>缺口 {item.gap_count}</p>
+                        </div>
+                        <button
+                          className={`rounded-md px-3 py-2 text-xs font-medium ${
+                            isActive
+                              ? 'bg-ink text-white'
+                              : 'border border-line bg-white text-slate-700 hover:border-signal'
+                          }`}
+                          onClick={() => setOutputVariant(item.variant)}
+                          type="button"
+                        >
+                          {isActive ? '当前版本' : '选择这个版本'}
+                        </button>
+                      </article>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </section>

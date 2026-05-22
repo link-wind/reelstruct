@@ -18,6 +18,23 @@ try {
   const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByLabel("输出版本").selectOption("high_click");
+  await page.getByRole("button", { name: "生成版本对比" }).click();
+  await page.waitForTimeout(700);
+  const variantBodyText = await page.locator("body").innerText();
+  if (!variantBodyText.includes("高点击版") || !variantBodyText.includes("高转化版") || !variantBodyText.includes("高节奏版")) {
+    throw new Error("missing output variant comparison cards");
+  }
+  if (!variantBodyText.includes("前 2 秒")) {
+    throw new Error("missing high-click hook summary in variant comparison");
+  }
+  const highClickVariantCard = page
+    .locator("article")
+    .filter({ hasText: "高点击版" })
+    .filter({ has: page.getByRole("button", { name: "选择这个版本" }) })
+    .first();
+  if ((await highClickVariantCard.count()) > 0) {
+    await highClickVariantCard.getByRole("button", { name: "选择这个版本" }).click();
+  }
   await page.getByRole("button", { name: "生成迁移 demo" }).click();
   await page.waitForTimeout(3000);
 

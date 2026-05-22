@@ -17,6 +17,8 @@ from app.models import (
     SampleUploadResponse,
     StructureTemplateRecord,
     StructureTemplateSummary,
+    StructureVariantSummary,
+    StructureVariantsResponse,
     TranscriptUploadResponse,
     UpdateStructureTemplateRequest,
     StructurePreviewRequest,
@@ -78,6 +80,34 @@ def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePre
         material_request_sheet=request.material_request_sheet,
         variant=request.variant,
     )
+
+
+@app.post("/api/structure/variants", response_model=StructureVariantsResponse)
+def compare_structure_variants(request: StructurePreviewRequest) -> StructureVariantsResponse:
+    template_record = _get_template_record_or_404(request.template_id) if request.template_id else None
+    variants = []
+    for variant in ("standard", "high_click", "high_conversion", "fast_rhythm"):
+        preview = build_structure_preview(
+            request.sample,
+            request.content,
+            template_override=template_record.template if template_record else None,
+            mapping_overrides=request.mapping_overrides,
+            material_request_sheet=request.material_request_sheet,
+            variant=variant,
+        )
+        mapping_lookup = {item.slot_id: item for item in preview.transfer_plan.mappings}
+        variants.append(
+            StructureVariantSummary(
+                variant=variant,
+                title=preview.transfer_plan.title,
+                duration=preview.composition.duration,
+                hook=mapping_lookup.get("hook").target_message if mapping_lookup.get("hook") else "",
+                cta=mapping_lookup.get("cta").target_message if mapping_lookup.get("cta") else "",
+                gap_count=len(preview.transfer_plan.gaps),
+                rhythm_summary=preview.template.rhythm_summary,
+            )
+        )
+    return StructureVariantsResponse(variants=variants)
 
 
 @app.post("/api/runs/demo", response_model=DemoRunResponse)
