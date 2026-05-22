@@ -17,6 +17,9 @@ type MaterialGap = {
   missing_asset: string
   impact: string
   fill_strategy: string
+  suggested_asset_type: string
+  suggested_shots: string[]
+  pickup_checklist: string[]
 }
 
 type TransferMapping = {
@@ -657,6 +660,48 @@ export default function ReelStructWorkspace() {
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
           </div>
+
+          <div className="mt-5 border-t border-line pt-5">
+            <p className="text-sm font-semibold text-signal">素材补位建议</p>
+            <h3 className="mt-1 text-lg font-semibold">建议补拍清单</h3>
+            {preview?.transfer_plan.gaps.length ? (
+              <div className="mt-4 grid gap-3">
+                {preview.transfer_plan.gaps.map((gap) => (
+                  <article key={gap.slot_id} className="rounded-md border border-line p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="text-sm">{labelForSlot(gap.slot_id)}</strong>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
+                        {gap.suggested_asset_type}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{gap.fill_strategy}</p>
+
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">建议镜头</p>
+                      <ul className="mt-2 grid gap-2 text-sm leading-6 text-slate-700">
+                        {gap.suggested_shots.map((item) => (
+                          <li key={item}>- {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="mt-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">检查清单</p>
+                      <ul className="mt-2 grid gap-2 text-sm leading-6 text-slate-700">
+                        {gap.pickup_checklist.map((item) => (
+                          <li key={item}>- {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {preview ? '当前结构段都有对应素材，暂时不需要补拍。' : '生成后会根据缺口自动给出补拍建议。'}
+              </p>
+            )}
+          </div>
         </aside>
       </section>
 
@@ -773,6 +818,16 @@ function buildMappingOverrides(
       sample_evidence,
       asset_strategy,
     }))
+}
+
+function labelForSlot(slotId: string): string {
+  const labelMap: Record<string, string> = {
+    hook: 'Hook',
+    selling_points: '卖点展开',
+    usage: '使用过程',
+    cta: 'CTA',
+  }
+  return labelMap[slotId] || slotId
 }
 
 const fallbackSlots: StructureSlot[] = [

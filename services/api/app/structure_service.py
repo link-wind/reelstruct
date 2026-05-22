@@ -108,6 +108,9 @@ def detect_material_gaps(
                 missing_asset=slot.required_asset,
                 impact=f"{slot.label} 缺少直接画面支撑，表达会变弱。",
                 fill_strategy=_fill_strategy_for_slot(slot.id),
+                suggested_asset_type=_suggested_asset_type_for_slot(slot.id),
+                suggested_shots=_suggested_shots_for_slot(slot.id),
+                pickup_checklist=_pickup_checklist_for_slot(slot.id),
             )
         )
     return gaps
@@ -221,6 +224,68 @@ def _fill_strategy_for_slot(slot_id: str) -> str:
         "cta": "使用结尾标题卡片 + 行动号召字幕补足 CTA",
     }
     return strategies.get(slot_id, "使用字幕和包装元素补足表达")
+
+
+def _suggested_asset_type_for_slot(slot_id: str) -> str:
+    asset_types = {
+        "hook": "情绪开场镜头",
+        "selling_points": "商品卖点特写",
+        "usage": "使用场景过程镜头",
+        "cta": "结尾行动号召镜头",
+    }
+    return asset_types.get(slot_id, "补位素材镜头")
+
+
+def _suggested_shots_for_slot(slot_id: str) -> list[str]:
+    shot_map = {
+        "hook": [
+            "3 秒内完成结果或福利信息出场",
+            "手持推进或快切镜头强化注意力",
+            "人物表情 / 商品亮点做第一落点",
+        ],
+        "selling_points": [
+            "产品特写交代核心卖点",
+            "局部细节镜头补充质感或功能点",
+            "一镜一卖点，避免多个信息挤在同一画面",
+        ],
+        "usage": [
+            "真实场景里拍一段连续使用过程",
+            "补一个手部动作或前后对比镜头",
+            "环境音或字幕能直接说明使用语境",
+        ],
+        "cta": [
+            "结尾停留 1-2 秒给行动信息",
+            "门店位置 / 购买入口 / 优惠信息单独给镜头",
+            "人物口播或字幕明确下一步动作",
+        ],
+    }
+    return shot_map.get(slot_id, ["补一段能直接支撑当前文案的镜头"])
+
+
+def _pickup_checklist_for_slot(slot_id: str) -> list[str]:
+    checklist_map = {
+        "hook": [
+            "主信息是否在前 3 秒出现",
+            "画面主体是否足够大",
+            "字幕是否能脱离声音单独成立",
+        ],
+        "selling_points": [
+            "每个卖点是否对应单独镜头",
+            "产品特写是否清楚交代细节",
+            "字幕和镜头是否在讲同一个卖点",
+        ],
+        "usage": [
+            "过程镜头是否完整且连贯",
+            "是否能看出真实使用场景",
+            "字幕是否补足了动作含义",
+        ],
+        "cta": [
+            "字幕里是否有明确行动词",
+            "优惠或入口信息是否单独出现",
+            "结尾停留时间是否足够读完",
+        ],
+    }
+    return checklist_map.get(slot_id, ["确认这段镜头能直接支撑当前结构段"])
 
 
 def apply_slot_level_overrides(

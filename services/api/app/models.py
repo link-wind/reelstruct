@@ -72,6 +72,9 @@ class MaterialGap(BaseModel):
     missing_asset: str
     impact: str
     fill_strategy: str
+    suggested_asset_type: str = ""
+    suggested_shots: list[str] = Field(default_factory=list)
+    pickup_checklist: list[str] = Field(default_factory=list)
 
 
 class TransferMapping(BaseModel):

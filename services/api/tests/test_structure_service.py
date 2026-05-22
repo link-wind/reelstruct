@@ -21,6 +21,10 @@ def test_build_structure_preview_marks_missing_assets_and_tracks():
     assert response.template.script_pattern[0].id == "hook"
     assert response.transfer_plan.title == "清透保湿精华 结构迁移方案"
     assert {gap.slot_id for gap in response.transfer_plan.gaps} == {"selling_points", "cta"}
+    gap_lookup = {gap.slot_id: gap for gap in response.transfer_plan.gaps}
+    assert gap_lookup["selling_points"].suggested_asset_type == "商品卖点特写"
+    assert any("产品特写" in item for item in gap_lookup["selling_points"].suggested_shots)
+    assert any("字幕" in item for item in gap_lookup["cta"].pickup_checklist)
     assert any(track.type == "card" for track in response.composition.tracks)
     assert response.composition.duration == 30
 
