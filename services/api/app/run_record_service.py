@@ -46,6 +46,15 @@ def update_demo_run_pinned(run_id: str, pinned: bool, runs_dir: Path) -> Optiona
     return updated
 
 
+def update_demo_run_preferred(run_id: str, preferred: bool, runs_dir: Path) -> Optional[DemoRunResponse]:
+    record = load_demo_run_record(run_id, runs_dir)
+    if record is None:
+        return None
+    updated = record.model_copy(update={"preferred": preferred})
+    save_demo_run_record(updated, runs_dir)
+    return updated
+
+
 def list_demo_run_records(
     runs_dir: Path,
     limit: int = 100,
@@ -70,6 +79,7 @@ def list_demo_run_records(
                     created_at=created_at,
                     status=payload.get("status", "failed"),
                     pinned=payload.get("pinned", False),
+                    preferred=payload.get("preferred", False),
                     template_id=payload.get("template_id", ""),
                     template_title=payload.get("template_title", ""),
                     template_tags=payload.get("template_tags", []),

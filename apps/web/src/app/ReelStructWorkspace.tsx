@@ -109,6 +109,7 @@ type DemoRunResponse = {
   created_at: string
   status: 'succeeded' | 'failed'
   pinned: boolean
+  preferred: boolean
   template_id: string
   template_title: string
   template_tags: string[]
@@ -129,6 +130,7 @@ type RunRecordSummary = {
   created_at: string
   status: 'succeeded' | 'failed'
   pinned: boolean
+  preferred: boolean
   template_id: string
   template_title: string
   template_tags: string[]
@@ -785,6 +787,30 @@ export default function ReelStructWorkspace() {
     }
   }
 
+  const toggleRunPreferred = async (runId = run?.run_id, currentPreferred = run?.preferred || false) => {
+    if (!runId) return
+    try {
+      const response = await fetch(`/api/runs/${runId}/preferred`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ preferred: !currentPreferred }),
+      })
+      if (!response.ok) {
+        throw new Error(`设置首选失败：${response.status}`)
+      }
+      const payload = (await response.json()) as DemoRunResponse
+      if (run?.run_id === payload.run_id) {
+        setRun(payload)
+      }
+      await fetchRecentRuns()
+      setStatus(payload.preferred ? '已设为首选版本' : '已取消首选版本')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '设置首选失败')
+    }
+  }
+
   const saveRunAsTemplate = async () => {
     if (!run) return
     try {
@@ -1388,6 +1414,7 @@ export default function ReelStructWorkspace() {
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
             <p>Pinned: {run?.pinned ? '已置顶' : '未置顶'}</p>
+            <p>Preferred: {run?.preferred ? '首选版本' : '未设首选'}</p>
             <p>Variant: {variantLabel(run?.variant || preview?.transfer_plan.variant || outputVariant)}</p>
             <p>Template: {run?.template_title || selectedTemplate?.title || '默认样例结构'}</p>
             <p>Tags: {(run?.template_tags.length ? run.template_tags : selectedTemplate?.tags || []).join(' / ') || '--'}</p>
@@ -1439,6 +1466,14 @@ export default function ReelStructWorkspace() {
               type="button"
             >
               {run?.pinned ? '取消置顶' : '置顶记录'}
+            </button>
+            <button
+              className="w-fit rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+              onClick={() => void toggleRunPreferred()}
+              disabled={!run}
+              type="button"
+            >
+              {run?.preferred ? '取消首选' : '设为首选版本'}
             </button>
             <button
               className="w-fit rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
@@ -1834,6 +1869,7 @@ export default function ReelStructWorkspace() {
                       <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                         {isCurrentRun ? <span className="rounded-full bg-ink px-2.5 py-1 text-white">当前预览</span> : null}
                         {item.pinned ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">已置顶</span> : null}
+                        {item.preferred ? <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">首选版本</span> : null}
                         <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
                           {variantLabel(item.variant)}
                         </span>
@@ -1862,7 +1898,16 @@ export default function ReelStructWorkspace() {
                       </div>
                       <p className="mt-3 text-sm leading-6 text-slate-600">{item.target_topic}</p>
                       {item.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.note}</p> : null}
-                      <p className="mt-2 text-xs text-slate-500">{formatRunTime(item.created_at)}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                          onClick={() => void toggleRunPreferred(item.run_id, item.preferred)}
+                          type="button"
+                        >
+                          {item.preferred ? '取消首选' : '设为首选'}
+                        </button>
+                        <p className="text-xs text-slate-500">{formatRunTime(item.created_at)}</p>
+                      </div>
                     </article>
                   )
                 })}

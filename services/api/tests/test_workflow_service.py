@@ -201,6 +201,43 @@ def test_list_saved_demo_runs_includes_key_message_summary():
     assert summary["cta"] == "给出行动理由，引导用户立即完成咨询、到店或下单"
 
 
+def test_mark_demo_run_as_preferred_persists_to_detail_and_list():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "首选版本样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "首选版本短视频",
+                "product_name": "首选版本门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "variant": "high_click",
+        },
+    )
+
+    assert response.status_code == 200
+    run_id = response.json()["run_id"]
+    preferred_response = client.patch(f"/api/runs/{run_id}/preferred", json={"preferred": True})
+    detail_response = client.get(f"/api/runs/{run_id}")
+    list_response = client.get("/api/runs", params={"q": run_id})
+
+    assert preferred_response.status_code == 200
+    assert preferred_response.json()["preferred"] is True
+    assert detail_response.status_code == 200
+    assert detail_response.json()["preferred"] is True
+    assert list_response.status_code == 200
+    [summary] = [item for item in list_response.json() if item["run_id"] == run_id]
+    assert summary["preferred"] is True
+
+
 def test_compare_structure_variants_returns_all_output_options():
     client = TestClient(app)
 

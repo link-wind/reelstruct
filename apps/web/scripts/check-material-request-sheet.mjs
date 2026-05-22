@@ -150,6 +150,12 @@ try {
   if (!bodyTextAfterPin.includes("前 2 秒抛出反差问题")) {
     throw new Error("missing high-click hook text in recent run comparison");
   }
+  await page.getByRole("button", { name: "设为首选版本" }).click();
+  await page.waitForTimeout(500);
+  const bodyTextAfterPreferred = await page.locator("body").innerText();
+  if (!bodyTextAfterPreferred.includes("首选版本") || !bodyTextAfterPreferred.includes("Preferred: 首选版本")) {
+    throw new Error("missing preferred run state");
+  }
   const firstCurrentRunMatch = bodyTextAfterPin.match(/Run:\s*(demo-[a-z0-9]{8})/);
   if (!firstCurrentRunMatch) {
     throw new Error("missing current run id");

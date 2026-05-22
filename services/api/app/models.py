@@ -152,6 +152,7 @@ class RunRecordSummary(BaseModel):
     created_at: str = ""
     status: Literal["succeeded", "failed"]
     pinned: bool = False
+    preferred: bool = False
     template_id: str = ""
     template_title: str = ""
     template_tags: list[str] = Field(default_factory=list)
@@ -172,6 +173,7 @@ class DemoRunResponse(BaseModel):
     created_at: str = ""
     status: Literal["succeeded", "failed"]
     pinned: bool = False
+    preferred: bool = False
     template_id: str = ""
     template_title: str = ""
     template_tags: list[str] = Field(default_factory=list)
@@ -193,6 +195,10 @@ class RunNoteUpdateRequest(BaseModel):
 
 class RunPinUpdateRequest(BaseModel):
     pinned: bool = False
+
+
+class RunPreferredUpdateRequest(BaseModel):
+    preferred: bool = False
 
 
 class StructureTemplateSummary(BaseModel):
