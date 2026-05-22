@@ -37,6 +37,7 @@ from app.template_record_service import (
     delete_structure_template_record,
     list_structure_template_records,
     load_structure_template_record,
+    rollback_structure_template_record,
     update_structure_template_record,
 )
 from app.workflow_service import create_demo_run
@@ -149,6 +150,14 @@ def update_template(template_id: str, request: UpdateStructureTemplateRequest) -
     record = update_structure_template_record(template_id, request, TEMPLATES_DIR)
     if record is None:
         raise HTTPException(status_code=404, detail="Template not found")
+    return record
+
+
+@app.post("/api/templates/{template_id}/rollback/{version_id}", response_model=StructureTemplateRecord)
+def rollback_template(template_id: str, version_id: str) -> StructureTemplateRecord:
+    record = rollback_structure_template_record(template_id, version_id, TEMPLATES_DIR)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Template version not found")
     return record
 
 

@@ -141,6 +141,14 @@ type StructureTemplateRecord = {
     rhythm_summary: string
     script_pattern: StructureSlot[]
   }
+  versions: Array<{
+    version_id: string
+    created_at: string
+    template: {
+      title: string
+      rhythm_summary: string
+    }
+  }>
 }
 
 type StructureTemplateSummary = {
@@ -753,6 +761,38 @@ export default function ReelStructWorkspace() {
       setStatus('模板修改已保存')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '保存模板修改失败')
+    }
+  }
+
+  const rollbackTemplateVersion = async (versionId: string) => {
+    if (!selectedTemplateId) return
+    try {
+      const response = await fetch(`/api/templates/${selectedTemplateId}/rollback/${versionId}`, {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        throw new Error(`模板回退失败：${response.status}`)
+      }
+      const record = (await response.json()) as StructureTemplateRecord
+      setSelectedTemplateDetail(record)
+      setTemplateEditorDraft({
+        title: record.template.title,
+        rhythm_summary: record.template.rhythm_summary,
+        slots: Object.fromEntries(
+          record.template.script_pattern.map((slot) => [
+            slot.id,
+            {
+              duration: String(slot.duration),
+              required_asset: slot.required_asset,
+            },
+          ]),
+        ),
+      })
+      setTemplateNameDraft(record.template.title)
+      await fetchTemplates()
+      setStatus('模板已回退')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '模板回退失败')
     }
   }
 
@@ -1416,6 +1456,44 @@ export default function ReelStructWorkspace() {
                         </div>
                       </article>
                     ))}
+                  </div>
+                  <div className="rounded-md border border-line bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-signal">模板版本</p>
+                        <h4 className="mt-1 text-base font-semibold">最近快照</h4>
+                      </div>
+                      <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                        {selectedTemplateDetail.versions.length} 条
+                      </span>
+                    </div>
+                    {selectedTemplateDetail.versions.length ? (
+                      <div className="mt-4 grid gap-3">
+                        {selectedTemplateDetail.versions.slice(0, 5).map((version) => (
+                          <article key={version.version_id} className="rounded-md border border-line bg-white p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <strong className="text-sm">{version.template.title}</strong>
+                                <p className="mt-1 text-xs text-slate-500">{version.version_id}</p>
+                              </div>
+                              <button
+                                className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700"
+                                onClick={() => void rollbackTemplateVersion(version.version_id)}
+                                type="button"
+                              >
+                                回退到这一版
+                              </button>
+                            </div>
+                            <p className="mt-3 text-sm leading-6 text-slate-600">{version.template.rhythm_summary}</p>
+                            <p className="mt-2 text-xs text-slate-500">{formatRunTime(version.created_at)}</p>
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        先保存一次模板修改，这里才会生成版本快照。
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

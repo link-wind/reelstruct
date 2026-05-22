@@ -646,3 +646,73 @@ def test_update_template_changes_title_rhythm_and_slot_fields():
     assert run_slot_lookup["hook"]["duration"] == 5.0
     assert run_slot_lookup["hook"]["required_asset"] == "夜景开场镜头"
     assert run_gap_lookup["hook"]["missing_asset"] == "夜景开场镜头"
+
+
+def test_template_update_creates_version_and_can_rollback():
+    client = TestClient(app)
+
+    run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "版本来源样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "版本测试短视频",
+                "product_name": "版本测试门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert run_response.status_code == 200
+    run_id = run_response.json()["run_id"]
+
+    save_response = client.post(f"/api/templates/from-run/{run_id}", json={"title": "原始模板"})
+    assert save_response.status_code == 200
+    template_id = save_response.json()["template_id"]
+
+    first_update_response = client.patch(
+        f"/api/templates/{template_id}",
+        json={
+            "title": "第一版模板",
+            "rhythm_summary": "4-8-5-3",
+            "slots": [
+                {"slot_id": "hook", "duration": 4.0, "required_asset": "开头吸引镜头"},
+            ],
+        },
+    )
+    second_update_response = client.patch(
+        f"/api/templates/{template_id}",
+        json={
+            "title": "第二版模板",
+            "rhythm_summary": "5-7-5-3",
+            "slots": [
+                {"slot_id": "hook", "duration": 5.0, "required_asset": "夜景开场镜头"},
+            ],
+        },
+    )
+
+    assert first_update_response.status_code == 200
+    assert second_update_response.status_code == 200
+    latest_template = second_update_response.json()
+    assert len(latest_template["versions"]) >= 2
+    previous_version = latest_template["versions"][0]
+    assert previous_version["template"]["title"] == "第一版模板"
+
+    rollback_response = client.post(f"/api/templates/{template_id}/rollback/{previous_version['version_id']}")
+    detail_response = client.get(f"/api/templates/{template_id}")
+
+    assert rollback_response.status_code == 200
+    rolled_back = rollback_response.json()
+    assert detail_response.status_code == 200
+    slot_lookup = {slot["id"]: slot for slot in rolled_back["template"]["script_pattern"]}
+    assert rolled_back["template"]["title"] == "第一版模板"
+    assert rolled_back["template"]["rhythm_summary"] == "4-8-5-3"
+    assert slot_lookup["hook"]["duration"] == 4.0
+    assert slot_lookup["hook"]["required_asset"] == "开头吸引镜头"
+    assert len(rolled_back["versions"]) >= 2

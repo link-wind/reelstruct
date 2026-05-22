@@ -7,6 +7,7 @@ from app.models import (
     DemoRunResponse,
     StructureTemplateRecord,
     StructureTemplateSummary,
+    StructureTemplateVersion,
     UpdateStructureTemplateRequest,
 )
 
@@ -33,6 +34,7 @@ def create_structure_template_from_run(
         created_at=datetime.now(timezone.utc).isoformat(),
         source_run_id=run.run_id,
         template=template,
+        versions=[],
     )
     save_structure_template_record(record, templates_dir)
     return record
@@ -62,6 +64,8 @@ def update_structure_template_record(
     if record is None:
         return None
 
+    versions = [_snapshot_template(record.template), *record.versions]
+
     slot_updates = {item.slot_id: item for item in request.slots}
     next_start = 0.0
     next_slots = []
@@ -87,7 +91,30 @@ def update_structure_template_record(
             "script_pattern": next_slots,
         }
     )
-    updated = record.model_copy(update={"template": next_template})
+    updated = record.model_copy(update={"template": next_template, "versions": versions})
+    save_structure_template_record(updated, templates_dir)
+    return updated
+
+
+def rollback_structure_template_record(
+    template_id: str,
+    version_id: str,
+    templates_dir: Path,
+) -> Optional[StructureTemplateRecord]:
+    record = load_structure_template_record(template_id, templates_dir)
+    if record is None:
+        return None
+
+    selected_version = next((item for item in record.versions if item.version_id == version_id), None)
+    if selected_version is None:
+        return None
+
+    updated = record.model_copy(
+        update={
+            "template": selected_version.template.model_copy(deep=True),
+            "versions": [_snapshot_template(record.template), *record.versions],
+        }
+    )
     save_structure_template_record(updated, templates_dir)
     return updated
 
@@ -109,3 +136,11 @@ def list_structure_template_records(templates_dir: Path, limit: int = 20) -> lis
         )
         for item in records[:limit]
     ]
+
+
+def _snapshot_template(template) -> StructureTemplateVersion:
+    return StructureTemplateVersion(
+        version_id=f"ver-{uuid4().hex[:8]}",
+        created_at=datetime.now(timezone.utc).isoformat(),
+        template=template.model_copy(deep=True),
+    )

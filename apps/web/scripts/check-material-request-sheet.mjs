@@ -177,6 +177,18 @@ try {
   }
   await page.getByLabel("按模板筛选").selectOption("");
   await page.waitForTimeout(300);
+  await page.getByRole("button", { name: "回退到这一版" }).first().click();
+  await page.waitForTimeout(500);
+  const bodyTextAfterRollback = await page.locator("body").innerText();
+  if (!bodyTextAfterRollback.includes(templateTitle)) {
+    throw new Error("missing rolled back template title");
+  }
+  await page.getByRole("button", { name: "生成迁移 demo" }).click();
+  await page.waitForTimeout(3000);
+  const bodyTextAfterRollbackRun = await page.locator("body").innerText();
+  if (!bodyTextAfterRollbackRun.includes(`Template: ${templateTitle}`)) {
+    throw new Error("missing rolled back template state on current run");
+  }
 
   const [jsonDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -184,11 +196,11 @@ try {
   ]);
   const jsonDownloadPath = await jsonDownload.path();
   const jsonText = jsonDownloadPath ? await fs.readFile(jsonDownloadPath, "utf-8") : "";
-  if (!jsonText.includes(`\"template_title\": \"${editedTemplateTitle}\"`)) {
+  if (!jsonText.includes(`\"template_title\": \"${templateTitle}\"`)) {
     throw new Error("missing persisted template title in exported json");
   }
 
-  const currentRunMatch = bodyTextAfterTemplateRun.match(/Run:\s*(demo-[a-z0-9]{8})/);
+  const currentRunMatch = bodyTextAfterRollbackRun.match(/Run:\s*(demo-[a-z0-9]{8})/);
   if (!currentRunMatch) {
     throw new Error("missing current run id");
   }
@@ -229,7 +241,7 @@ try {
 
   const templateCard = page
     .locator("article")
-    .filter({ hasText: editedTemplateTitle })
+    .filter({ hasText: templateTitle })
     .filter({ has: page.getByRole("button", { name: "删除模板" }) })
     .first();
   await templateCard.getByRole("button", { name: "删除模板" }).click();

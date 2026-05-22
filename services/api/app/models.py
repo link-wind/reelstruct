@@ -192,11 +192,18 @@ class StructureTemplateSummary(BaseModel):
     rhythm_summary: str = ""
 
 
+class StructureTemplateVersion(BaseModel):
+    version_id: str
+    created_at: str = ""
+    template: TemplateStructure
+
+
 class StructureTemplateRecord(BaseModel):
     template_id: str
     created_at: str = ""
     source_run_id: str = ""
     template: TemplateStructure
+    versions: list[StructureTemplateVersion] = Field(default_factory=list)
 
 
 class CreateTemplateFromRunRequest(BaseModel):
