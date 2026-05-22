@@ -1,3 +1,5 @@
+from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 from app.fixture_asset_service import build_render_clips_from_composition
@@ -8,11 +10,12 @@ from app.models import (
     RunTraceEvent,
     StructurePreviewRequest,
 )
+from app.run_record_service import save_demo_run_record
 from app.render_service import render_demo_video
 from app.structure_service import build_structure_preview
 
 
-def create_demo_run(request: StructurePreviewRequest) -> DemoRunResponse:
+def create_demo_run(request: StructurePreviewRequest, runs_dir: Optional[Path] = None) -> DemoRunResponse:
     run_id = f"demo-{uuid4().hex[:8]}"
     trace = [
         RunTraceEvent(
@@ -66,7 +69,7 @@ def create_demo_run(request: StructurePreviewRequest) -> DemoRunResponse:
         )
     )
 
-    return DemoRunResponse(
+    response = DemoRunResponse(
         run_id=run_id,
         status="succeeded",
         preview=preview,
@@ -87,3 +90,6 @@ def create_demo_run(request: StructurePreviewRequest) -> DemoRunResponse:
         ),
         trace=trace,
     )
+    if runs_dir is not None:
+        save_demo_run_record(response, runs_dir)
+    return response

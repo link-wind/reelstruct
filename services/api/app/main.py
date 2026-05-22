@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.staticfiles import StaticFiles
 
 from app.fixture_asset_service import build_render_clips_from_composition
@@ -16,6 +16,7 @@ from app.models import (
     StructurePreviewResponse,
 )
 from app.render_service import render_demo_video
+from app.run_record_service import load_demo_run_record
 from app.sample_service import extract_transcript_upload, save_sample_upload
 from app.structure_service import build_structure_preview
 from app.workflow_service import create_demo_run
@@ -26,9 +27,11 @@ STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 DOWNLOADS_DIR = STORAGE_DIR / "downloads"
 OUTPUT_DIR = STORAGE_DIR / "output"
 SAMPLES_DIR = STORAGE_DIR / "samples"
+RUNS_DIR = STORAGE_DIR / "runs"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+RUNS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
 app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
@@ -52,7 +55,15 @@ def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePre
 
 @app.post("/api/runs/demo", response_model=DemoRunResponse)
 def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
-    return create_demo_run(request)
+    return create_demo_run(request, runs_dir=RUNS_DIR)
+
+
+@app.get("/api/runs/{run_id}", response_model=DemoRunResponse)
+def get_run_record(run_id: str) -> DemoRunResponse:
+    record = load_demo_run_record(run_id, RUNS_DIR)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return record
 
 
 @app.post("/api/samples/upload", response_model=SampleUploadResponse)

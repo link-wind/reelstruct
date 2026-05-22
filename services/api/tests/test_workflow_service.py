@@ -129,3 +129,43 @@ def test_create_demo_run_returns_material_request_sheet_from_request():
         {"slot_id": "selling_points", "status": "已拍"},
         {"slot_id": "cta", "status": "已交付"},
     ]
+
+
+def test_get_saved_demo_run_returns_snapshot():
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "咖啡拉花爆款样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先用拉花特写吸引注意，再展示手作过程。",
+            },
+            "content": {
+                "topic": "精品咖啡店开业短视频",
+                "product_name": "巷口手作咖啡",
+                "selling_points": ["手作拉花", "新店开业优惠"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "material_request_sheet": [
+                {
+                    "slot_id": "selling_points",
+                    "status": "已拍",
+                }
+            ],
+        },
+    )
+
+    assert create_response.status_code == 200
+    created = create_response.json()
+
+    get_response = client.get(f"/api/runs/{created['run_id']}")
+
+    assert get_response.status_code == 200
+    saved = get_response.json()
+    assert saved["run_id"] == created["run_id"]
+    assert saved["preview"]["transfer_plan"]["material_request_sheet"] == [
+        {"slot_id": "selling_points", "status": "已拍"}
+    ]

@@ -392,6 +392,25 @@ export default function ReelStructWorkspace() {
     setRequestSheetFeedback('需求单已导出')
   }
 
+  const exportRunJson = async () => {
+    if (!run) return
+
+    try {
+      const response = await fetch(`/api/runs/${run.run_id}`)
+      const payload = response.ok ? await response.json() : run
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${run.run_id}.json`
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setStatus('run 记录已导出')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '导出 run 记录失败')
+    }
+  }
+
   return (
     <main className="min-h-screen bg-paper text-ink">
       <section className="border-b border-line bg-white">
@@ -762,6 +781,17 @@ export default function ReelStructWorkspace() {
             <p>Assets: {run?.prepared_assets.length ?? 0}</p>
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+              onClick={exportRunJson}
+              disabled={!run}
+              type="button"
+            >
+              导出 run JSON
+            </button>
           </div>
 
           <div className="mt-5 border-t border-line pt-5">

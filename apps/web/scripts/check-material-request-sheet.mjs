@@ -71,6 +71,19 @@ try {
     throw new Error("missing persisted request sheet status after rerun");
   }
 
+  const [jsonDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "导出 run JSON" }).click(),
+  ]);
+  const jsonDownloadPath = await jsonDownload.path();
+  const jsonText = jsonDownloadPath ? await fs.readFile(jsonDownloadPath, "utf-8") : "";
+  if (!jsonText.includes("\"material_request_sheet\"")) {
+    throw new Error("missing material request sheet in exported run json");
+  }
+  if (!jsonText.includes("\"status\": \"已拍\"")) {
+    throw new Error("missing persisted status in exported run json");
+  }
+
   await page.getByRole("button", { name: "清空需求单" }).click();
   const bodyTextAfterClear = await page.locator("body").innerText();
   if (!bodyTextAfterClear.includes("先从补拍建议里勾选缺口，再点“加入需求单”。")) {
