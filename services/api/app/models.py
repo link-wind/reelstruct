@@ -83,7 +83,9 @@ class TransferMapping(BaseModel):
 
 class TransferMappingOverride(BaseModel):
     slot_id: str
-    target_message: str
+    target_message: str = ""
+    sample_evidence: str = ""
+    asset_strategy: str = ""
 
 
 class TransferPlan(BaseModel):

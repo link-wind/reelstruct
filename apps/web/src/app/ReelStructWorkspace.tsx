@@ -130,6 +130,14 @@ type TranscriptUploadResponse = {
 type TransferMappingOverride = {
   slot_id: string
   target_message: string
+  sample_evidence: string
+  asset_strategy: string
+}
+
+type SlotDraft = {
+  target_message: string
+  sample_evidence: string
+  asset_strategy: string
 }
 
 const workflow = [
@@ -180,7 +188,7 @@ export default function ReelStructWorkspace() {
   const [content, setContent] = useState<NewContentInput>(defaultContent)
   const [sampleUpload, setSampleUpload] = useState<SampleUploadResponse | null>(null)
   const [transcriptUpload, setTranscriptUpload] = useState<TranscriptUploadResponse | null>(null)
-  const [mappingDrafts, setMappingDrafts] = useState<Record<string, string>>({})
+  const [slotDrafts, setSlotDrafts] = useState<Record<string, SlotDraft>>({})
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
   const [error, setError] = useState('')
@@ -257,7 +265,7 @@ export default function ReelStructWorkspace() {
     try {
       const mapping_overrides =
         options?.useDraftOverrides && preview
-          ? buildMappingOverrides(preview, mappingDrafts)
+          ? buildMappingOverrides(preview, slotDrafts)
           : []
       const runResponse = await requestJson<DemoRunResponse>('/api/runs/demo', {
         method: 'POST',
@@ -269,7 +277,7 @@ export default function ReelStructWorkspace() {
       })
       setRun(runResponse)
       setPreview(runResponse.preview)
-      setMappingDrafts(buildMappingDrafts(runResponse.preview))
+      setSlotDrafts(buildSlotDrafts(runResponse.preview))
       setVideoUrl(`${runResponse.rendered_video.video_url}?t=${Date.now()}`)
       setStatus('迁移任务已完成')
     } catch (caught) {
@@ -540,31 +548,85 @@ export default function ReelStructWorkspace() {
             {(preview?.template.script_pattern || fallbackSlots).map((slot) => {
               const gap = gapLookup.get(slot.id)
               const mapping = mappingLookup.get(slot.id)
-              const draftValue = mappingDrafts[slot.id] ?? mapping?.target_message ?? slot.purpose
+              const draft = slotDrafts[slot.id] ?? {
+                target_message: mapping?.target_message ?? slot.purpose,
+                sample_evidence: slot.sample_evidence,
+                asset_strategy: mapping?.asset_strategy ?? gap?.fill_strategy ?? `使用已有素材：${slot.required_asset}`,
+              }
               return (
-                <article key={slot.id} className="grid gap-3 rounded-md border border-line p-4 sm:grid-cols-[108px_110px_1fr]">
-                  <strong>{slot.label}</strong>
-                  <span className="text-sm text-slate-500">
-                    {slot.start}-{Math.round((slot.start + slot.duration) * 10) / 10}s
-                  </span>
-                  <div>
-                    <span className={gap ? 'text-sm font-semibold text-coral' : 'text-sm font-semibold text-mint'}>
-                      {gap ? '缺口补全' : '已映射'}
+                <article key={slot.id} className="grid gap-4 rounded-md border border-line p-4">
+                  <div className="grid gap-2 sm:grid-cols-[108px_110px_1fr] sm:items-start">
+                    <strong>{slot.label}</strong>
+                    <span className="text-sm text-slate-500">
+                      {slot.start}-{Math.round((slot.start + slot.duration) * 10) / 10}s
                     </span>
-                    <textarea
-                      className="mt-2 min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm leading-6 text-ink outline-none focus:border-signal"
-                      value={draftValue}
-                      onChange={(event) =>
-                        setMappingDrafts({
-                          ...mappingDrafts,
-                          [slot.id]: event.target.value,
-                        })
-                      }
-                    />
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      {gap?.fill_strategy || mapping?.asset_strategy || slot.sample_evidence}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className={gap ? 'font-semibold text-coral' : 'font-semibold text-mint'}>
+                        {gap ? '缺口补全' : '已映射'}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
+                        需求素材：{slot.required_asset}
+                      </span>
+                    </div>
                   </div>
+
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      样例依据
+                      <textarea
+                        className="min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm leading-6 text-ink outline-none focus:border-signal"
+                        value={draft.sample_evidence}
+                        onChange={(event) =>
+                          setSlotDrafts({
+                            ...slotDrafts,
+                            [slot.id]: {
+                              ...draft,
+                              sample_evidence: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      迁移文案
+                      <textarea
+                        className="min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm leading-6 text-ink outline-none focus:border-signal"
+                        value={draft.target_message}
+                        onChange={(event) =>
+                          setSlotDrafts({
+                            ...slotDrafts,
+                            [slot.id]: {
+                              ...draft,
+                              target_message: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+
+                    <label className="grid gap-2 text-sm font-medium text-slate-700">
+                      补位策略
+                      <textarea
+                        className="min-h-24 w-full rounded-md border border-line px-3 py-2 text-sm leading-6 text-ink outline-none focus:border-signal"
+                        value={draft.asset_strategy}
+                        onChange={(event) =>
+                          setSlotDrafts({
+                            ...slotDrafts,
+                            [slot.id]: {
+                              ...draft,
+                              asset_strategy: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  {gap ? (
+                    <p className="text-xs leading-5 text-coral">
+                      当前缺口：{gap.missing_asset}。{gap.impact}
+                    </p>
+                  ) : null}
                 </article>
               )
             })}
@@ -670,24 +732,47 @@ function moveListItem(items: string[], index: number, delta: number): string[] {
   return nextItems
 }
 
-function buildMappingDrafts(preview: StructurePreviewResponse): Record<string, string> {
+function buildSlotDrafts(preview: StructurePreviewResponse): Record<string, SlotDraft> {
+  const slotLookup = new Map(preview.template.script_pattern.map((slot) => [slot.id, slot]))
   return Object.fromEntries(
-    preview.transfer_plan.mappings.map((mapping) => [mapping.slot_id, mapping.target_message]),
+    preview.transfer_plan.mappings.map((mapping) => [
+      mapping.slot_id,
+      {
+        target_message: mapping.target_message,
+        sample_evidence: slotLookup.get(mapping.slot_id)?.sample_evidence || '',
+        asset_strategy: mapping.asset_strategy,
+      },
+    ]),
   )
 }
 
 function buildMappingOverrides(
   preview: StructurePreviewResponse,
-  drafts: Record<string, string>,
+  drafts: Record<string, SlotDraft>,
 ): TransferMappingOverride[] {
+  const slotLookup = new Map(preview.template.script_pattern.map((slot) => [slot.id, slot]))
   return preview.transfer_plan.mappings
     .map((mapping) => ({
       slot_id: mapping.slot_id,
-      target_message: (drafts[mapping.slot_id] ?? '').trim(),
+      target_message: (drafts[mapping.slot_id]?.target_message ?? '').trim(),
+      sample_evidence: (drafts[mapping.slot_id]?.sample_evidence ?? '').trim(),
+      asset_strategy: (drafts[mapping.slot_id]?.asset_strategy ?? '').trim(),
       original_message: mapping.target_message,
+      original_sample_evidence: slotLookup.get(mapping.slot_id)?.sample_evidence ?? '',
+      original_asset_strategy: mapping.asset_strategy,
     }))
-    .filter((item) => item.target_message && item.target_message !== item.original_message)
-    .map(({ slot_id, target_message }) => ({ slot_id, target_message }))
+    .filter(
+      (item) =>
+        (item.target_message && item.target_message !== item.original_message) ||
+        (item.sample_evidence && item.sample_evidence !== item.original_sample_evidence) ||
+        (item.asset_strategy && item.asset_strategy !== item.original_asset_strategy),
+    )
+    .map(({ slot_id, target_message, sample_evidence, asset_strategy }) => ({
+      slot_id,
+      target_message,
+      sample_evidence,
+      asset_strategy,
+    }))
 }
 
 const fallbackSlots: StructureSlot[] = [

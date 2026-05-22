@@ -24,6 +24,7 @@ def build_structure_preview(
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
 ) -> StructurePreviewResponse:
     template = extract_template_structure(sample)
+    template = apply_slot_level_overrides(template, mapping_overrides)
     gaps = detect_material_gaps(template, content)
     transfer_plan = build_transfer_plan(template, content, gaps, mapping_overrides=mapping_overrides)
     composition = build_composition_spec(template, transfer_plan)
@@ -119,20 +120,17 @@ def build_transfer_plan(
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
 ) -> TransferPlan:
     gap_lookup = {gap.slot_id: gap for gap in gaps}
-    override_lookup = {
-        item.slot_id: item.target_message.strip()
-        for item in (mapping_overrides or [])
-        if item.target_message.strip()
-    }
+    override_lookup = {item.slot_id: item for item in (mapping_overrides or [])}
     mappings = []
 
     for slot in template.script_pattern:
-        target_message = override_lookup.get(slot.id) or _target_message_for_slot(slot.id, content)
-        asset_strategy = (
-            gap_lookup[slot.id].fill_strategy
-            if slot.id in gap_lookup
-            else f"使用已有素材：{slot.required_asset}"
+        override = override_lookup.get(slot.id)
+        target_message = (
+            override.target_message.strip()
+            if override and override.target_message.strip()
+            else _target_message_for_slot(slot.id, content)
         )
+        asset_strategy = build_asset_strategy(slot, gap_lookup.get(slot.id), override)
         mappings.append(
             TransferMapping(
                 slot_id=slot.id,
@@ -223,6 +221,61 @@ def _fill_strategy_for_slot(slot_id: str) -> str:
         "cta": "使用结尾标题卡片 + 行动号召字幕补足 CTA",
     }
     return strategies.get(slot_id, "使用字幕和包装元素补足表达")
+
+
+def apply_slot_level_overrides(
+    template: TemplateStructure,
+    mapping_overrides: Optional[list[TransferMappingOverride]] = None,
+) -> TemplateStructure:
+    if not mapping_overrides:
+        return template
+
+    override_lookup = {
+        item.slot_id: item.sample_evidence.strip()
+        for item in mapping_overrides
+        if item.sample_evidence.strip()
+    }
+    if not override_lookup:
+        return template
+
+    slots = [
+        slot.model_copy(
+            update={
+                "sample_evidence": override_lookup.get(slot.id, slot.sample_evidence),
+            }
+        )
+        for slot in template.script_pattern
+    ]
+    analysis = template.analysis_summary.model_copy(
+        update={
+            "narrative_beats": [
+                SampleAnalysisBeat(
+                    slot_id=slot.id,
+                    label=slot.label,
+                    evidence=slot.sample_evidence,
+                )
+                for slot in slots
+            ]
+        }
+    )
+    return template.model_copy(
+        update={
+            "script_pattern": slots,
+            "analysis_summary": analysis,
+        }
+    )
+
+
+def build_asset_strategy(
+    slot: StructureSlot,
+    gap: Optional[MaterialGap],
+    override: Optional[TransferMappingOverride],
+) -> str:
+    if override and override.asset_strategy.strip():
+        return override.asset_strategy.strip()
+    if gap:
+        return gap.fill_strategy
+    return f"使用已有素材：{slot.required_asset}"
 
 
 def split_transcript_beats(transcript_summary: str) -> dict[str, str]:

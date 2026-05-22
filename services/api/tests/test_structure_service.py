@@ -1,4 +1,4 @@
-from app.models import NewContentInput, SampleVideoInput
+from app.models import NewContentInput, SampleVideoInput, TransferMappingOverride
 from app.structure_service import build_structure_preview
 
 
@@ -83,3 +83,44 @@ def test_build_structure_preview_returns_sample_analysis_summary():
     beat_lookup = {item.slot_id: item.evidence for item in analysis.narrative_beats}
     assert beat_lookup["hook"] == "先讲熬夜脸很垮"
     assert beat_lookup["cta"] == "最后引导现在下单"
+
+
+def test_build_structure_preview_applies_slot_level_overrides():
+    response = build_structure_preview(
+        sample=SampleVideoInput(
+            title="咖啡样例",
+            duration=20,
+            shot_count=6,
+            transcript_summary="先用拉花特写吸引注意。再展示手作过程和门店氛围。最后引导到店打卡。",
+        ),
+        content=NewContentInput(
+            topic="咖啡店开业短视频",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        mapping_overrides=[
+            TransferMappingOverride(
+                slot_id="hook",
+                target_message="先讲开业前三天限时买一送一",
+                sample_evidence="样例开头用拉花特写 + 开业字幕抢注意力",
+            ),
+            TransferMappingOverride(
+                slot_id="selling_points",
+                asset_strategy="缺商品特写时，先上优惠卡片，再补环境镜头",
+            ),
+        ],
+    )
+
+    slot_lookup = {slot.id: slot for slot in response.template.script_pattern}
+    assert slot_lookup["hook"].sample_evidence == "样例开头用拉花特写 + 开业字幕抢注意力"
+
+    beat_lookup = {item.slot_id: item.evidence for item in response.template.analysis_summary.narrative_beats}
+    assert beat_lookup["hook"] == "样例开头用拉花特写 + 开业字幕抢注意力"
+
+    mapping_lookup = {item.slot_id: item for item in response.transfer_plan.mappings}
+    assert mapping_lookup["hook"].target_message == "先讲开业前三天限时买一送一"
+    assert mapping_lookup["selling_points"].asset_strategy == "缺商品特写时，先上优惠卡片，再补环境镜头"
+
+    card_texts = [track.text for track in response.composition.tracks if track.type == "card"]
+    assert "缺商品特写时，先上优惠卡片，再补环境镜头" in card_texts

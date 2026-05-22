@@ -59,17 +59,32 @@ def test_create_demo_run_applies_mapping_overrides_to_preview_and_tracks():
                 "available_assets": ["开头吸引镜头", "使用过程镜头"],
             },
             "mapping_overrides": [
-                {"slot_id": "hook", "target_message": "3 秒先讲新店开业限时福利"},
-                {"slot_id": "cta", "target_message": "现在到店领取开业双杯券"},
+                {
+                    "slot_id": "hook",
+                    "target_message": "3 秒先讲新店开业限时福利",
+                    "sample_evidence": "样例开头先给福利字幕，再给拉花特写",
+                },
+                {
+                    "slot_id": "cta",
+                    "target_message": "现在到店领取开业双杯券",
+                    "asset_strategy": "结尾用优惠卡片 + 到店字幕补足 CTA",
+                },
             ],
         },
     )
 
     assert response.status_code == 200
     body = response.json()
+    slot_lookup = {item["id"]: item for item in body["preview"]["template"]["script_pattern"]}
     mapping_lookup = {item["slot_id"]: item for item in body["preview"]["transfer_plan"]["mappings"]}
+    beat_lookup = {item["slot_id"]: item for item in body["preview"]["template"]["analysis_summary"]["narrative_beats"]}
+    assert slot_lookup["hook"]["sample_evidence"] == "样例开头先给福利字幕，再给拉花特写"
+    assert beat_lookup["hook"]["evidence"] == "样例开头先给福利字幕，再给拉花特写"
     assert mapping_lookup["hook"]["target_message"] == "3 秒先讲新店开业限时福利"
     assert mapping_lookup["cta"]["target_message"] == "现在到店领取开业双杯券"
+    assert mapping_lookup["cta"]["asset_strategy"] == "结尾用优惠卡片 + 到店字幕补足 CTA"
     caption_texts = [track["text"] for track in body["preview"]["composition"]["tracks"] if track["type"] == "caption"]
+    card_texts = [track["text"] for track in body["preview"]["composition"]["tracks"] if track["type"] == "card"]
     assert "3 秒先讲新店开业限时福利" in caption_texts
     assert "现在到店领取开业双杯券" in caption_texts
+    assert "结尾用优惠卡片 + 到店字幕补足 CTA" in card_texts
