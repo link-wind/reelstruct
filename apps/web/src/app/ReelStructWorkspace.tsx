@@ -107,6 +107,7 @@ type DemoRunResponse = {
   run_id: string
   created_at: string
   status: 'succeeded' | 'failed'
+  pinned: boolean
   note: string
   preview: StructurePreviewResponse
   prepared_assets: RenderClipPreview[]
@@ -118,6 +119,7 @@ type RunRecordSummary = {
   run_id: string
   created_at: string
   status: 'succeeded' | 'failed'
+  pinned: boolean
   title: string
   target_topic: string
   gap_count: number
@@ -522,6 +524,28 @@ export default function ReelStructWorkspace() {
     }
   }
 
+  const toggleRunPinned = async () => {
+    if (!run) return
+    try {
+      const response = await fetch(`/api/runs/${run.run_id}/pin`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pinned: !run.pinned }),
+      })
+      if (!response.ok) {
+        throw new Error(`置顶记录失败：${response.status}`)
+      }
+      const payload = (await response.json()) as DemoRunResponse
+      setRun(payload)
+      await fetchRecentRuns()
+      setStatus(payload.pinned ? 'run 已置顶' : 'run 已取消置顶')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '置顶记录失败')
+    }
+  }
+
   return (
     <main className="min-h-screen bg-paper text-ink">
       <section className="border-b border-line bg-white">
@@ -892,6 +916,7 @@ export default function ReelStructWorkspace() {
             <p>Assets: {run?.prepared_assets.length ?? 0}</p>
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
+            <p>Pinned: {run?.pinned ? '已置顶' : '未置顶'}</p>
           </div>
 
           <div className="mt-3 grid gap-2">
@@ -912,6 +937,14 @@ export default function ReelStructWorkspace() {
               type="button"
             >
               保存备注
+            </button>
+            <button
+              className="w-fit rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+              onClick={toggleRunPinned}
+              disabled={!run}
+              type="button"
+            >
+              {run?.pinned ? '取消置顶' : '置顶记录'}
             </button>
             {run?.note ? <p className="text-sm leading-6 text-slate-700">{run.note}</p> : null}
           </div>
@@ -1003,6 +1036,7 @@ export default function ReelStructWorkspace() {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                      {item.pinned ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">已置顶</span> : null}
                       <span className="rounded-full bg-white px-2.5 py-1">缺口 {item.gap_count}</span>
                       <span className="rounded-full bg-white px-2.5 py-1">需求单 {item.material_request_count}</span>
                       <span className="rounded-full bg-white px-2.5 py-1">{item.status}</span>

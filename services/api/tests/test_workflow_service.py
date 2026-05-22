@@ -325,3 +325,58 @@ def test_update_saved_demo_run_note_persists_to_detail_and_list():
     assert detail_response.status_code == 200
     assert detail_response.json()["note"] == "优先补拍卖点特写"
     assert any(item["run_id"] == run_id and item["note"] == "优先补拍卖点特写" for item in list_response.json())
+
+
+def test_pin_saved_demo_run_moves_it_to_top():
+    client = TestClient(app)
+
+    first_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "置顶第一条样例",
+                "duration": 18,
+                "shot_count": 5,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "置顶第一条短视频",
+                "product_name": "置顶第一家门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+    second_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "置顶第二条样例",
+                "duration": 22,
+                "shot_count": 7,
+                "transcript_summary": "先给结果，再给过程。",
+            },
+            "content": {
+                "topic": "置顶第二条短视频",
+                "product_name": "置顶第二家门店",
+                "selling_points": ["卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    first_run_id = first_response.json()["run_id"]
+
+    pin_response = client.patch(f"/api/runs/{first_run_id}/pin", json={"pinned": True})
+    list_response = client.get("/api/runs")
+    detail_response = client.get(f"/api/runs/{first_run_id}")
+
+    assert pin_response.status_code == 200
+    assert pin_response.json()["pinned"] is True
+    assert detail_response.status_code == 200
+    assert detail_response.json()["pinned"] is True
+    runs = list_response.json()
+    assert runs[0]["run_id"] == first_run_id
+    assert runs[0]["pinned"] is True

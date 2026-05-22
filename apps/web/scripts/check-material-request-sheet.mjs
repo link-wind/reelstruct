@@ -102,6 +102,12 @@ try {
   if (!bodyTextAfterNoteSave.includes("优先补拍卖点特写")) {
     throw new Error("missing saved run note");
   }
+  await page.getByRole("button", { name: "置顶记录" }).click();
+  await page.waitForTimeout(500);
+  const bodyTextAfterPin = await page.locator("body").innerText();
+  if (!bodyTextAfterPin.includes("已置顶")) {
+    throw new Error("missing pinned run state");
+  }
 
   const [jsonDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -118,12 +124,38 @@ try {
   if (!jsonText.includes("\"note\": \"优先补拍卖点特写\"")) {
     throw new Error("missing persisted run note in exported json");
   }
+  if (!jsonText.includes("\"pinned\": true")) {
+    throw new Error("missing persisted pinned state in exported json");
+  }
 
-  const firstRunId = await page.locator('text=/demo-[a-z0-9]{8}/').first().innerText();
-  const firstRunCard = page.locator("article").filter({ hasText: firstRunId }).first();
-  await page.getByRole("button", { name: "删除记录" }).first().click();
+  const currentRunMatch = bodyTextAfterPin.match(/Run:\s*(demo-[a-z0-9]{8})/);
+  if (!currentRunMatch) {
+    throw new Error("missing current run id");
+  }
+  const currentRunId = currentRunMatch[1];
+  const recentRunCards = page.locator("article").filter({ has: page.getByRole("button", { name: "删除记录" }) });
+  const recentRunCount = await recentRunCards.count();
+  if (recentRunCount < 2) {
+    throw new Error("expected at least two recent runs before deletion");
+  }
+  let deletedRunId = "";
+  let deleteIndex = -1;
+  for (let index = 0; index < recentRunCount; index += 1) {
+    const cardText = await recentRunCards.nth(index).innerText();
+    if (!cardText.includes(currentRunId)) {
+      const runIdMatch = cardText.match(/demo-[a-z0-9]{8}/);
+      deletedRunId = runIdMatch?.[0] || "";
+      deleteIndex = index;
+      break;
+    }
+  }
+  if (deleteIndex === -1 || !deletedRunId) {
+    throw new Error("failed to find non-current run card for deletion");
+  }
+  await recentRunCards.nth(deleteIndex).getByRole("button", { name: "删除记录" }).click();
   await page.waitForTimeout(500);
-  if ((await firstRunCard.count()) !== 0) {
+  const bodyTextAfterDelete = await page.locator("body").innerText();
+  if (bodyTextAfterDelete.includes(deletedRunId)) {
     throw new Error("deleted run card still visible in recent runs list");
   }
 

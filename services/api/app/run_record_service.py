@@ -37,6 +37,15 @@ def update_demo_run_note(run_id: str, note: str, runs_dir: Path) -> Optional[Dem
     return updated
 
 
+def update_demo_run_pinned(run_id: str, pinned: bool, runs_dir: Path) -> Optional[DemoRunResponse]:
+    record = load_demo_run_record(run_id, runs_dir)
+    if record is None:
+        return None
+    updated = record.model_copy(update={"pinned": pinned})
+    save_demo_run_record(updated, runs_dir)
+    return updated
+
+
 def list_demo_run_records(
     runs_dir: Path,
     limit: int = 20,
@@ -57,6 +66,7 @@ def list_demo_run_records(
                     run_id=payload.get("run_id", path.stem),
                     created_at=created_at,
                     status=payload.get("status", "failed"),
+                    pinned=payload.get("pinned", False),
                     title=transfer_plan.get("title", "未命名迁移任务"),
                     target_topic=transfer_plan.get("target_topic", ""),
                     gap_count=len(transfer_plan.get("gaps", [])),
@@ -68,6 +78,7 @@ def list_demo_run_records(
         )
 
     items = [item for _, item in sorted(summaries, key=lambda pair: pair[0], reverse=True)]
+    items.sort(key=lambda item: not item.pinned)
     if status in {"succeeded", "failed"}:
         items = [item for item in items if item.status == status]
     if q.strip():

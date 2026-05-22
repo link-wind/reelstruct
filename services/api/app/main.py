@@ -10,6 +10,7 @@ from app.models import (
     PrepareDemoAssetsResponse,
     RenderClipPreview,
     RenderDemoResponse,
+    RunPinUpdateRequest,
     RunNoteUpdateRequest,
     RunRecordSummary,
     SampleUploadResponse,
@@ -23,6 +24,7 @@ from app.run_record_service import (
     list_demo_run_records,
     load_demo_run_record,
     update_demo_run_note,
+    update_demo_run_pinned,
 )
 from app.sample_service import extract_transcript_upload, save_sample_upload
 from app.structure_service import build_structure_preview
@@ -84,6 +86,14 @@ def delete_run_record(run_id: str) -> Response:
 @app.patch("/api/runs/{run_id}/note", response_model=DemoRunResponse)
 def patch_run_note(run_id: str, request: RunNoteUpdateRequest) -> DemoRunResponse:
     record = update_demo_run_note(run_id, request.note, RUNS_DIR)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return record
+
+
+@app.patch("/api/runs/{run_id}/pin", response_model=DemoRunResponse)
+def patch_run_pin(run_id: str, request: RunPinUpdateRequest) -> DemoRunResponse:
+    record = update_demo_run_pinned(run_id, request.pinned, RUNS_DIR)
     if record is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return record

@@ -150,6 +150,7 @@ class RunRecordSummary(BaseModel):
     run_id: str
     created_at: str = ""
     status: Literal["succeeded", "failed"]
+    pinned: bool = False
     title: str
     target_topic: str = ""
     gap_count: int = 0
@@ -162,6 +163,7 @@ class DemoRunResponse(BaseModel):
     run_id: str
     created_at: str = ""
     status: Literal["succeeded", "failed"]
+    pinned: bool = False
     note: str = ""
     preview: "StructurePreviewResponse"
     prepared_assets: list[RenderClipPreview] = Field(default_factory=list)
@@ -171,6 +173,10 @@ class DemoRunResponse(BaseModel):
 
 class RunNoteUpdateRequest(BaseModel):
     note: str = ""
+
+
+class RunPinUpdateRequest(BaseModel):
+    pinned: bool = False
 
 
 class StructurePreviewRequest(BaseModel):
