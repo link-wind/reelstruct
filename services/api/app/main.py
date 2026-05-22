@@ -76,8 +76,8 @@ def delete_run_record(run_id: str) -> Response:
 
 
 @app.get("/api/runs", response_model=list[RunRecordSummary])
-def list_run_records() -> list[RunRecordSummary]:
-    return list_demo_run_records(RUNS_DIR)
+def list_run_records(q: str = "", status: str = "") -> list[RunRecordSummary]:
+    return list_demo_run_records(RUNS_DIR, q=q, status=status)
 
 
 @app.post("/api/samples/upload", response_model=SampleUploadResponse)

@@ -220,6 +220,7 @@ export default function ReelStructWorkspace() {
   const [requestSheetFeedback, setRequestSheetFeedback] = useState('')
   const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
+  const [runSearchKeyword, setRunSearchKeyword] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
   const [error, setError] = useState('')
@@ -244,13 +245,6 @@ export default function ReelStructWorkspace() {
     return buildMaterialRequestSheetText(requestSheetGaps, requestSheetStatus)
   }, [requestSheetGaps, requestSheetStatus])
 
-  const visibleRecentRuns = useMemo(() => {
-    if (runStatusFilter === 'succeeded') {
-      return recentRuns.filter((item) => item.status === 'succeeded')
-    }
-    return recentRuns
-  }, [recentRuns, runStatusFilter])
-
   useEffect(() => {
     const nextGapIds = (preview?.transfer_plan.gaps || []).map((gap) => gap.slot_id)
     const nextRequestSheet = preview?.transfer_plan.material_request_sheet || []
@@ -268,7 +262,7 @@ export default function ReelStructWorkspace() {
 
   useEffect(() => {
     void fetchRecentRuns()
-  }, [])
+  }, [runStatusFilter, runSearchKeyword])
 
   const uploadSample = async (file: File | null) => {
     if (!file) return
@@ -359,7 +353,15 @@ export default function ReelStructWorkspace() {
 
   const fetchRecentRuns = async () => {
     try {
-      const response = await fetch('/api/runs')
+      const params = new URLSearchParams()
+      if (runStatusFilter !== 'all') {
+        params.set('status', runStatusFilter)
+      }
+      if (runSearchKeyword.trim()) {
+        params.set('q', runSearchKeyword.trim())
+      }
+      const query = params.toString()
+      const response = await fetch(`/api/runs${query ? `?${query}` : ''}`)
       if (!response.ok) {
         throw new Error(`读取记录失败：${response.status}`)
       }
@@ -876,6 +878,16 @@ export default function ReelStructWorkspace() {
             >
               刷新记录
             </button>
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <span className="sr-only">搜索记录</span>
+              <input
+                aria-label="搜索记录"
+                className="rounded-md border border-line px-3 py-2 text-xs text-ink outline-none focus:border-signal"
+                placeholder="搜索记录"
+                value={runSearchKeyword}
+                onChange={(event) => setRunSearchKeyword(event.target.value)}
+              />
+            </label>
             <button
               className={
                 runStatusFilter === 'all'
@@ -907,12 +919,12 @@ export default function ReelStructWorkspace() {
                 <h3 className="mt-1 text-lg font-semibold">最近生成结果</h3>
               </div>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                {visibleRecentRuns.length} 条
+                {recentRuns.length} 条
               </span>
             </div>
-            {visibleRecentRuns.length ? (
+            {recentRuns.length ? (
               <div className="mt-4 grid gap-3">
-                {visibleRecentRuns.slice(0, 5).map((item) => (
+                {recentRuns.slice(0, 5).map((item) => (
                   <article key={item.run_id} className="rounded-md border border-line bg-slate-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -947,7 +959,9 @@ export default function ReelStructWorkspace() {
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm leading-6 text-slate-600">生成后这里会保留最近几次 run 记录。</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                {runSearchKeyword.trim() ? '没有匹配的 run 记录。' : '生成后这里会保留最近几次 run 记录。'}
+              </p>
             )}
           </div>
 

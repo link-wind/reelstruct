@@ -258,3 +258,35 @@ def test_delete_saved_demo_run_removes_snapshot():
     assert delete_response.status_code == 204
     assert get_response.status_code == 404
     assert run_id not in [item["run_id"] for item in list_response.json()]
+
+
+def test_list_saved_demo_runs_supports_keyword_query():
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "搜索样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "搜索短视频",
+                "product_name": "搜索门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert create_response.status_code == 200
+    run_id = create_response.json()["run_id"]
+
+    query_response = client.get("/api/runs", params={"q": "搜索门店"})
+
+    assert query_response.status_code == 200
+    runs = query_response.json()
+    assert any(item["run_id"] == run_id for item in runs)
+    assert all("搜索门店" in item["title"] or "搜索门店" in item["target_topic"] for item in runs)

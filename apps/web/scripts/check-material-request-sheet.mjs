@@ -82,6 +82,19 @@ try {
     throw new Error("missing success filter control");
   }
   await page.getByRole("button", { name: "全部记录" }).click();
+  await page.getByLabel("搜索记录").fill("不存在的记录");
+  await page.waitForTimeout(300);
+  const bodyTextAfterSearchMiss = await page.locator("body").innerText();
+  if (!bodyTextAfterSearchMiss.includes("没有匹配的 run 记录。")) {
+    throw new Error("missing empty search state");
+  }
+  await page.getByLabel("搜索记录").fill("巷口手作咖啡");
+  await page.waitForTimeout(300);
+  const bodyTextAfterSearchHit = await page.locator("body").innerText();
+  if (!bodyTextAfterSearchHit.includes("巷口手作咖啡 结构迁移方案")) {
+    throw new Error("missing matched search result");
+  }
+  await page.getByLabel("搜索记录").fill("");
 
   const [jsonDownload] = await Promise.all([
     page.waitForEvent("download"),

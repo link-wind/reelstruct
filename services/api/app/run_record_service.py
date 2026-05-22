@@ -28,7 +28,12 @@ def delete_demo_run_record(run_id: str, runs_dir: Path) -> bool:
     return True
 
 
-def list_demo_run_records(runs_dir: Path, limit: int = 20) -> list[RunRecordSummary]:
+def list_demo_run_records(
+    runs_dir: Path,
+    limit: int = 20,
+    q: str = "",
+    status: str = "",
+) -> list[RunRecordSummary]:
     summaries: list[tuple[tuple[str, int], RunRecordSummary]] = []
 
     for path in runs_dir.glob("*.json"):
@@ -52,7 +57,19 @@ def list_demo_run_records(runs_dir: Path, limit: int = 20) -> list[RunRecordSumm
             )
         )
 
-    return [item for _, item in sorted(summaries, key=lambda pair: pair[0], reverse=True)[:limit]]
+    items = [item for _, item in sorted(summaries, key=lambda pair: pair[0], reverse=True)]
+    if status in {"succeeded", "failed"}:
+        items = [item for item in items if item.status == status]
+    if q.strip():
+        needle = q.strip().lower()
+        items = [
+            item
+            for item in items
+            if needle in item.run_id.lower()
+            or needle in item.title.lower()
+            or needle in item.target_topic.lower()
+        ]
+    return items[:limit]
 
 
 def _mtime_to_iso(path: Path) -> str:
