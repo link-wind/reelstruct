@@ -114,6 +114,7 @@ try {
   }
   const templateTitle = `${firstCurrentRunMatch[1]} 结构模板`;
   await page.getByLabel("模板名称").fill(templateTitle);
+  await page.getByRole("textbox", { name: "模板标签", exact: true }).fill("餐饮，本地生活");
   await page.getByRole("button", { name: "保存为模板" }).click();
   await page.waitForTimeout(500);
   const bodyTextAfterTemplateSave = await page.locator("body").innerText();
@@ -126,9 +127,21 @@ try {
   if (!bodyTextAfterTemplateSave.includes(templateTitle)) {
     throw new Error("missing saved template title");
   }
+  if (!bodyTextAfterTemplateSave.includes("标签 餐饮") || !bodyTextAfterTemplateSave.includes("标签 本地生活")) {
+    throw new Error("missing saved template tags");
+  }
+  await page.getByLabel("按模板标签筛选").fill("本地生活");
+  await page.waitForTimeout(500);
+  const bodyTextAfterTemplateTagFilter = await page.locator("body").innerText();
+  if (!bodyTextAfterTemplateTagFilter.includes(templateTitle)) {
+    throw new Error("missing template after tag filter");
+  }
+  await page.getByLabel("按模板标签筛选").fill("");
+  await page.waitForTimeout(300);
   const editedTemplateTitle = `${firstCurrentRunMatch[1]} 夜咖模板`;
   await page.getByLabel("编辑模板标题").fill(editedTemplateTitle);
   await page.getByLabel("模板节奏摘要").fill("5-7-5-3 的夜场节奏");
+  await page.getByLabel("编辑模板标签").fill("餐饮，本地生活，夜咖");
   await page.getByLabel("Hook 时长").fill("5");
   await page.getByLabel("Hook 素材要求").fill("夜景开场镜头");
   await page.getByRole("button", { name: "保存模板修改" }).click();
@@ -136,6 +149,9 @@ try {
   const bodyTextAfterTemplateEdit = await page.locator("body").innerText();
   if (!bodyTextAfterTemplateEdit.includes(editedTemplateTitle)) {
     throw new Error("missing edited template title");
+  }
+  if (!bodyTextAfterTemplateEdit.includes("标签 夜咖")) {
+    throw new Error("missing edited template tag");
   }
 
   const [firstJsonDownload] = await Promise.all([
@@ -163,6 +179,9 @@ try {
   if (!bodyTextAfterTemplateRun.includes(`Template: ${editedTemplateTitle}`)) {
     throw new Error("missing applied template state on current run");
   }
+  if (!bodyTextAfterTemplateRun.includes("Tags: 餐饮 / 本地生活 / 夜咖")) {
+    throw new Error("missing inherited template tags on current run");
+  }
   if (!bodyTextAfterTemplateRun.includes("需求素材：夜景开场镜头")) {
     throw new Error("missing edited required asset in regenerated preview");
   }
@@ -176,6 +195,14 @@ try {
     throw new Error("missing template-filtered run badge");
   }
   await page.getByLabel("按模板筛选").selectOption("");
+  await page.waitForTimeout(300);
+  await page.getByLabel("按 run 标签筛选").fill("夜咖");
+  await page.waitForTimeout(500);
+  const bodyTextAfterRunTagFilter = await page.locator("body").innerText();
+  if (!bodyTextAfterRunTagFilter.includes("标签 夜咖") || !bodyTextAfterRunTagFilter.includes(`模板 ${editedTemplateTitle}`)) {
+    throw new Error("missing tag-filtered run badge");
+  }
+  await page.getByLabel("按 run 标签筛选").fill("");
   await page.waitForTimeout(300);
   await page.getByRole("button", { name: "回退到这一版" }).first().click();
   await page.waitForTimeout(500);
@@ -210,6 +237,9 @@ try {
   const jsonText = jsonDownloadPath ? await fs.readFile(jsonDownloadPath, "utf-8") : "";
   if (!jsonText.includes(`\"template_title\": \"${forkedTemplateTitle}\"`)) {
     throw new Error("missing persisted template title in exported json");
+  }
+  if (!jsonText.includes("\"template_tags\": [") || !jsonText.includes("\"夜咖\"")) {
+    throw new Error("missing persisted template tags in exported json");
   }
 
   const currentRunMatch = bodyTextAfterRollbackRun.match(/Run:\s*(demo-[a-z0-9]{8})/);

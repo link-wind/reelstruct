@@ -153,6 +153,7 @@ class RunRecordSummary(BaseModel):
     pinned: bool = False
     template_id: str = ""
     template_title: str = ""
+    template_tags: list[str] = Field(default_factory=list)
     title: str
     target_topic: str = ""
     gap_count: int = 0
@@ -168,6 +169,7 @@ class DemoRunResponse(BaseModel):
     pinned: bool = False
     template_id: str = ""
     template_title: str = ""
+    template_tags: list[str] = Field(default_factory=list)
     note: str = ""
     preview: "StructurePreviewResponse"
     prepared_assets: list[RenderClipPreview] = Field(default_factory=list)
@@ -188,6 +190,7 @@ class StructureTemplateSummary(BaseModel):
     created_at: str = ""
     source_run_id: str = ""
     title: str
+    tags: list[str] = Field(default_factory=list)
     slot_count: int = 0
     rhythm_summary: str = ""
 
@@ -202,12 +205,14 @@ class StructureTemplateRecord(BaseModel):
     template_id: str
     created_at: str = ""
     source_run_id: str = ""
+    tags: list[str] = Field(default_factory=list)
     template: TemplateStructure
     versions: list[StructureTemplateVersion] = Field(default_factory=list)
 
 
 class CreateTemplateFromRunRequest(BaseModel):
     title: str = ""
+    tags: list[str] = Field(default_factory=list)
 
 
 class UpdateStructureTemplateSlotRequest(BaseModel):
@@ -219,6 +224,7 @@ class UpdateStructureTemplateSlotRequest(BaseModel):
 class UpdateStructureTemplateRequest(BaseModel):
     title: str = ""
     rhythm_summary: str = ""
+    tags: list[str] = Field(default_factory=list)
     slots: list[UpdateStructureTemplateSlotRequest] = Field(default_factory=list)
 
 

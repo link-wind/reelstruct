@@ -52,6 +52,7 @@ def list_demo_run_records(
     q: str = "",
     status: str = "",
     template_id: str = "",
+    tag: str = "",
 ) -> list[RunRecordSummary]:
     summaries: list[tuple[tuple[str, int], RunRecordSummary]] = []
 
@@ -70,6 +71,7 @@ def list_demo_run_records(
                     pinned=payload.get("pinned", False),
                     template_id=payload.get("template_id", ""),
                     template_title=payload.get("template_title", ""),
+                    template_tags=payload.get("template_tags", []),
                     title=transfer_plan.get("title", "未命名迁移任务"),
                     target_topic=transfer_plan.get("target_topic", ""),
                     gap_count=len(transfer_plan.get("gaps", [])),
@@ -86,6 +88,8 @@ def list_demo_run_records(
         items = [item for item in items if item.status == status]
     if template_id.strip():
         items = [item for item in items if item.template_id == template_id.strip()]
+    if tag.strip():
+        items = [item for item in items if tag.strip() in item.template_tags]
     if q.strip():
         needle = q.strip().lower()
         items = [
@@ -96,6 +100,7 @@ def list_demo_run_records(
             or needle in item.target_topic.lower()
             or needle in item.note.lower()
             or needle in item.template_title.lower()
+            or needle in " ".join(item.template_tags).lower()
         ]
     return items[:limit]
 

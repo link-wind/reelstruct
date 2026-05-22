@@ -791,3 +791,89 @@ def test_fork_template_creates_independent_copy():
     assert original["template"]["title"] == "夜咖母模板"
     assert original_slot_lookup["hook"]["duration"] == 5.0
     assert original_slot_lookup["hook"]["required_asset"] == "夜景开场镜头"
+
+
+def test_template_tags_are_saved_listed_and_filter_runs():
+    client = TestClient(app)
+
+    run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "标签来源样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "标签测试短视频",
+                "product_name": "标签测试门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert run_response.status_code == 200
+    run_id = run_response.json()["run_id"]
+
+    save_response = client.post(
+        f"/api/templates/from-run/{run_id}",
+        json={"title": "餐饮探店模板", "tags": ["餐饮", "探店"]},
+    )
+    assert save_response.status_code == 200
+    template = save_response.json()
+    template_id = template["template_id"]
+    assert template["tags"] == ["餐饮", "探店"]
+
+    update_response = client.patch(
+        f"/api/templates/{template_id}",
+        json={
+            "title": "餐饮探店模板",
+            "rhythm_summary": template["template"]["rhythm_summary"],
+            "tags": ["餐饮", "本地生活", "餐饮"],
+            "slots": [
+                {
+                    "slot_id": slot["id"],
+                    "duration": slot["duration"],
+                    "required_asset": slot["required_asset"],
+                }
+                for slot in template["template"]["script_pattern"]
+            ],
+        },
+    )
+    list_templates_response = client.get("/api/templates", params={"tag": "本地生活"})
+
+    assert update_response.status_code == 200
+    updated_template = update_response.json()
+    assert updated_template["tags"] == ["餐饮", "本地生活"]
+    assert list_templates_response.status_code == 200
+    assert any(item["template_id"] == template_id and "本地生活" in item["tags"] for item in list_templates_response.json())
+
+    templated_run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "套标签模板样例",
+                "duration": 30,
+                "shot_count": 8,
+                "transcript_summary": "这个样例不该决定最终结构。",
+            },
+            "content": {
+                "topic": "本地生活短视频",
+                "product_name": "巷口餐厅",
+                "selling_points": ["招牌套餐"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "template_id": template_id,
+        },
+    )
+    list_runs_response = client.get("/api/runs", params={"tag": "本地生活"})
+
+    assert templated_run_response.status_code == 200
+    templated_run = templated_run_response.json()
+    assert templated_run["template_tags"] == ["餐饮", "本地生活"]
+    assert list_runs_response.status_code == 200
+    runs = list_runs_response.json()
+    assert any(item["run_id"] == templated_run["run_id"] for item in runs)
+    assert all("本地生活" in item["template_tags"] for item in runs)

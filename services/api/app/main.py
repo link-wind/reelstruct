@@ -88,6 +88,7 @@ def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
         template_override=template_record.template if template_record else None,
         template_id=template_record.template_id if template_record else "",
         template_title=template_record.template.title if template_record else "",
+        template_tags=template_record.tags if template_record else [],
     )
 
 
@@ -124,8 +125,8 @@ def patch_run_pin(run_id: str, request: RunPinUpdateRequest) -> DemoRunResponse:
 
 
 @app.get("/api/runs", response_model=list[RunRecordSummary])
-def list_run_records(q: str = "", status: str = "", template_id: str = "") -> list[RunRecordSummary]:
-    return list_demo_run_records(RUNS_DIR, q=q, status=status, template_id=template_id)
+def list_run_records(q: str = "", status: str = "", template_id: str = "", tag: str = "") -> list[RunRecordSummary]:
+    return list_demo_run_records(RUNS_DIR, q=q, status=status, template_id=template_id, tag=tag)
 
 
 @app.post("/api/templates/from-run/{run_id}", response_model=StructureTemplateRecord)
@@ -133,12 +134,12 @@ def save_template_from_run(run_id: str, request: CreateTemplateFromRunRequest) -
     run = load_demo_run_record(run_id, RUNS_DIR)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    return create_structure_template_from_run(run, TEMPLATES_DIR, title=request.title)
+    return create_structure_template_from_run(run, TEMPLATES_DIR, title=request.title, tags=request.tags)
 
 
 @app.get("/api/templates", response_model=list[StructureTemplateSummary])
-def list_templates() -> list[StructureTemplateSummary]:
-    return list_structure_template_records(TEMPLATES_DIR)
+def list_templates(tag: str = "") -> list[StructureTemplateSummary]:
+    return list_structure_template_records(TEMPLATES_DIR, tag=tag)
 
 
 @app.get("/api/templates/{template_id}", response_model=StructureTemplateRecord)
@@ -164,7 +165,12 @@ def rollback_template(template_id: str, version_id: str) -> StructureTemplateRec
 
 @app.post("/api/templates/{template_id}/fork", response_model=StructureTemplateRecord)
 def fork_template(template_id: str, request: CreateTemplateFromRunRequest) -> StructureTemplateRecord:
-    record = fork_structure_template_record(template_id, request.title, TEMPLATES_DIR)
+    record = fork_structure_template_record(
+        template_id,
+        request.title,
+        TEMPLATES_DIR,
+        tags=request.tags if "tags" in request.model_fields_set else None,
+    )
     if record is None:
         raise HTTPException(status_code=404, detail="Template not found")
     return record

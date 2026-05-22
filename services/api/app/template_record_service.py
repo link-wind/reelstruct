@@ -23,6 +23,7 @@ def create_structure_template_from_run(
     run: DemoRunResponse,
     templates_dir: Path,
     title: str = "",
+    tags: Optional[list[str]] = None,
 ) -> StructureTemplateRecord:
     template = run.preview.template.model_copy(
         update={
@@ -33,6 +34,7 @@ def create_structure_template_from_run(
         template_id=f"tpl-{uuid4().hex[:8]}",
         created_at=datetime.now(timezone.utc).isoformat(),
         source_run_id=run.run_id,
+        tags=_normalize_tags(tags or []),
         template=template,
         versions=[],
     )
@@ -91,7 +93,13 @@ def update_structure_template_record(
             "script_pattern": next_slots,
         }
     )
-    updated = record.model_copy(update={"template": next_template, "versions": versions})
+    updated = record.model_copy(
+        update={
+            "tags": _normalize_tags(request.tags) if "tags" in request.model_fields_set else record.tags,
+            "template": next_template,
+            "versions": versions,
+        }
+    )
     save_structure_template_record(updated, templates_dir)
     return updated
 
@@ -123,6 +131,7 @@ def fork_structure_template_record(
     template_id: str,
     title: str,
     templates_dir: Path,
+    tags: Optional[list[str]] = None,
 ) -> Optional[StructureTemplateRecord]:
     record = load_structure_template_record(template_id, templates_dir)
     if record is None:
@@ -132,6 +141,7 @@ def fork_structure_template_record(
         template_id=f"tpl-{uuid4().hex[:8]}",
         created_at=datetime.now(timezone.utc).isoformat(),
         source_run_id=record.source_run_id,
+        tags=_normalize_tags(tags) if tags is not None else [*record.tags],
         template=record.template.model_copy(
             deep=True,
             update={"title": title.strip() or f"{record.template.title} 副本"},
@@ -142,10 +152,17 @@ def fork_structure_template_record(
     return forked
 
 
-def list_structure_template_records(templates_dir: Path, limit: int = 20) -> list[StructureTemplateSummary]:
+def list_structure_template_records(
+    templates_dir: Path,
+    limit: int = 20,
+    tag: str = "",
+) -> list[StructureTemplateSummary]:
     records: list[StructureTemplateRecord] = []
     for path in templates_dir.glob("*.json"):
         records.append(StructureTemplateRecord.model_validate_json(path.read_text(encoding="utf-8")))
+
+    if tag.strip():
+        records = [record for record in records if tag.strip() in record.tags]
 
     records.sort(key=lambda item: item.created_at, reverse=True)
     return [
@@ -154,6 +171,7 @@ def list_structure_template_records(templates_dir: Path, limit: int = 20) -> lis
             created_at=item.created_at,
             source_run_id=item.source_run_id,
             title=item.template.title,
+            tags=item.tags,
             slot_count=len(item.template.script_pattern),
             rhythm_summary=item.template.rhythm_summary,
         )
@@ -167,3 +185,12 @@ def _snapshot_template(template) -> StructureTemplateVersion:
         created_at=datetime.now(timezone.utc).isoformat(),
         template=template.model_copy(deep=True),
     )
+
+
+def _normalize_tags(tags: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for tag in tags:
+        clean_tag = tag.strip()
+        if clean_tag and clean_tag not in normalized:
+            normalized.append(clean_tag)
+    return normalized

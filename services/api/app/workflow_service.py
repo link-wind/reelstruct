@@ -23,6 +23,7 @@ def create_demo_run(
     template_override: Optional[TemplateStructure] = None,
     template_id: str = "",
     template_title: str = "",
+    template_tags: Optional[list[str]] = None,
 ) -> DemoRunResponse:
     run_id = f"demo-{uuid4().hex[:8]}"
     created_at = datetime.now(timezone.utc).isoformat()
@@ -85,6 +86,7 @@ def create_demo_run(
         status="succeeded",
         template_id=template_id,
         template_title=template_title,
+        template_tags=template_tags or [],
         preview=preview,
         prepared_assets=[
             RenderClipPreview(

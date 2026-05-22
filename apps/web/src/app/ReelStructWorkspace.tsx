@@ -110,6 +110,7 @@ type DemoRunResponse = {
   pinned: boolean
   template_id: string
   template_title: string
+  template_tags: string[]
   note: string
   preview: StructurePreviewResponse
   prepared_assets: RenderClipPreview[]
@@ -124,6 +125,7 @@ type RunRecordSummary = {
   pinned: boolean
   template_id: string
   template_title: string
+  template_tags: string[]
   title: string
   target_topic: string
   gap_count: number
@@ -136,6 +138,7 @@ type StructureTemplateRecord = {
   template_id: string
   created_at: string
   source_run_id: string
+  tags: string[]
   template: {
     title: string
     rhythm_summary: string
@@ -156,6 +159,7 @@ type StructureTemplateSummary = {
   created_at: string
   source_run_id: string
   title: string
+  tags: string[]
   slot_count: number
   rhythm_summary: string
 }
@@ -209,6 +213,7 @@ type TemplateSlotDraft = {
 type TemplateEditorDraft = {
   title: string
   rhythm_summary: string
+  tags: string
   slots: Record<string, TemplateSlotDraft>
 }
 
@@ -271,7 +276,10 @@ export default function ReelStructWorkspace() {
   const [selectedTemplateDetail, setSelectedTemplateDetail] = useState<StructureTemplateRecord | null>(null)
   const [templateEditorDraft, setTemplateEditorDraft] = useState<TemplateEditorDraft | null>(null)
   const [templateNameDraft, setTemplateNameDraft] = useState('')
+  const [templateTagsDraft, setTemplateTagsDraft] = useState('')
+  const [templateTagFilter, setTemplateTagFilter] = useState('')
   const [runTemplateFilter, setRunTemplateFilter] = useState('')
+  const [runTagFilter, setRunTagFilter] = useState('')
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
   const [runSearchKeyword, setRunSearchKeyword] = useState('')
   const [runNoteDraft, setRunNoteDraft] = useState('')
@@ -324,11 +332,11 @@ export default function ReelStructWorkspace() {
 
   useEffect(() => {
     void fetchRecentRuns()
-  }, [runStatusFilter, runSearchKeyword, runTemplateFilter])
+  }, [runStatusFilter, runSearchKeyword, runTemplateFilter, runTagFilter])
 
   useEffect(() => {
     void fetchTemplates()
-  }, [])
+  }, [templateTagFilter])
 
   useEffect(() => {
     if (!selectedTemplateId) {
@@ -342,16 +350,18 @@ export default function ReelStructWorkspace() {
   useEffect(() => {
     if (selectedTemplate) {
       setTemplateNameDraft(selectedTemplate.title)
+      setTemplateTagsDraft(selectedTemplate.tags.join('，'))
       return
     }
     if (run?.template_title) {
       setTemplateNameDraft(run.template_title)
+      setTemplateTagsDraft(run.template_tags.join('，'))
       return
     }
     if (preview?.template.title) {
       setTemplateNameDraft(preview.template.title)
     }
-  }, [selectedTemplate, run?.template_title, preview?.template.title])
+  }, [selectedTemplate, run?.template_tags, run?.template_title, preview?.template.title])
 
   const uploadSample = async (file: File | null) => {
     if (!file) return
@@ -450,6 +460,9 @@ export default function ReelStructWorkspace() {
       if (runTemplateFilter) {
         params.set('template_id', runTemplateFilter)
       }
+      if (runTagFilter.trim()) {
+        params.set('tag', runTagFilter.trim())
+      }
       if (runSearchKeyword.trim()) {
         params.set('q', runSearchKeyword.trim())
       }
@@ -467,7 +480,12 @@ export default function ReelStructWorkspace() {
 
   const fetchTemplates = async () => {
     try {
-      const response = await fetch('/api/templates')
+      const params = new URLSearchParams()
+      if (templateTagFilter.trim()) {
+        params.set('tag', templateTagFilter.trim())
+      }
+      const query = params.toString()
+      const response = await fetch(`/api/templates${query ? `?${query}` : ''}`)
       if (!response.ok) {
         throw new Error(`读取模板失败：${response.status}`)
       }
@@ -494,6 +512,7 @@ export default function ReelStructWorkspace() {
       setTemplateEditorDraft({
         title: record.template.title,
         rhythm_summary: record.template.rhythm_summary,
+        tags: record.tags.join('，'),
         slots: Object.fromEntries(
           record.template.script_pattern.map((slot) => [
             slot.id,
@@ -683,7 +702,7 @@ export default function ReelStructWorkspace() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ title: templateNameDraft }),
+        body: JSON.stringify({ title: templateNameDraft, tags: splitList(templateTagsDraft) }),
       })
       if (!response.ok) {
         throw new Error(`保存模板失败：${response.status}`)
@@ -691,6 +710,7 @@ export default function ReelStructWorkspace() {
       const payload = (await response.json()) as StructureTemplateRecord
       setSelectedTemplateId(payload.template_id)
       setTemplateNameDraft(payload.template.title)
+      setTemplateTagsDraft(payload.tags.join('，'))
       await fetchTemplates()
       setStatus('已保存模板')
     } catch (caught) {
@@ -731,6 +751,7 @@ export default function ReelStructWorkspace() {
         body: JSON.stringify({
           title: templateEditorDraft.title,
           rhythm_summary: templateEditorDraft.rhythm_summary,
+          tags: splitList(templateEditorDraft.tags),
           slots: selectedTemplateDetail.template.script_pattern.map((slot) => ({
             slot_id: slot.id,
             duration: Number(templateEditorDraft.slots[slot.id]?.duration || slot.duration),
@@ -746,6 +767,7 @@ export default function ReelStructWorkspace() {
       setTemplateEditorDraft({
         title: record.template.title,
         rhythm_summary: record.template.rhythm_summary,
+        tags: record.tags.join('，'),
         slots: Object.fromEntries(
           record.template.script_pattern.map((slot) => [
             slot.id,
@@ -757,6 +779,7 @@ export default function ReelStructWorkspace() {
         ),
       })
       setTemplateNameDraft(record.template.title)
+      setTemplateTagsDraft(record.tags.join('，'))
       await fetchTemplates()
       setStatus('模板修改已保存')
     } catch (caught) {
@@ -778,6 +801,7 @@ export default function ReelStructWorkspace() {
       setTemplateEditorDraft({
         title: record.template.title,
         rhythm_summary: record.template.rhythm_summary,
+        tags: record.tags.join('，'),
         slots: Object.fromEntries(
           record.template.script_pattern.map((slot) => [
             slot.id,
@@ -789,6 +813,7 @@ export default function ReelStructWorkspace() {
         ),
       })
       setTemplateNameDraft(record.template.title)
+      setTemplateTagsDraft(record.tags.join('，'))
       await fetchTemplates()
       setStatus('模板已回退')
     } catch (caught) {
@@ -812,6 +837,7 @@ export default function ReelStructWorkspace() {
       await fetchTemplates()
       setSelectedTemplateId(record.template_id)
       setTemplateNameDraft(record.template.title)
+      setTemplateTagsDraft(record.tags.join('，'))
       setStatus('模板已复制')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '复制模板失败')
@@ -1190,6 +1216,7 @@ export default function ReelStructWorkspace() {
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
             <p>Pinned: {run?.pinned ? '已置顶' : '未置顶'}</p>
             <p>Template: {run?.template_title || selectedTemplate?.title || '默认样例结构'}</p>
+            <p>Tags: {(run?.template_tags.length ? run.template_tags : selectedTemplate?.tags || []).join(' / ') || '--'}</p>
           </div>
 
           <div className="mt-3 grid gap-2">
@@ -1201,6 +1228,16 @@ export default function ReelStructWorkspace() {
                 value={templateNameDraft}
                 onChange={(event) => setTemplateNameDraft(event.target.value)}
                 placeholder="给当前结构起个模板名"
+              />
+            </label>
+            <label className="grid gap-2 text-xs font-medium text-slate-700">
+              模板标签
+              <input
+                aria-label="模板标签"
+                className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={templateTagsDraft}
+                onChange={(event) => setTemplateTagsDraft(event.target.value)}
+                placeholder="餐饮，本地生活"
               />
             </label>
             <label className="grid gap-2 text-xs font-medium text-slate-700">
@@ -1266,6 +1303,16 @@ export default function ReelStructWorkspace() {
                 onChange={(event) => setRunSearchKeyword(event.target.value)}
               />
             </label>
+            <label className="flex items-center gap-2 text-xs text-slate-600">
+              <span className="sr-only">按 run 标签筛选</span>
+              <input
+                aria-label="按 run 标签筛选"
+                className="rounded-md border border-line px-3 py-2 text-xs text-ink outline-none focus:border-signal"
+                placeholder="按标签筛选"
+                value={runTagFilter}
+                onChange={(event) => setRunTagFilter(event.target.value)}
+              />
+            </label>
             <button
               className={
                 runStatusFilter === 'all'
@@ -1307,6 +1354,15 @@ export default function ReelStructWorkspace() {
                   <p className="mt-1 text-sm font-medium text-slate-800">
                     {selectedTemplate ? selectedTemplate.title : '默认样例结构'}
                   </p>
+                  {selectedTemplate?.tags.length ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {selectedTemplate.tags.map((tag) => (
+                        <span key={tag} className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                          标签 {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <button
                   className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
@@ -1333,6 +1389,16 @@ export default function ReelStructWorkspace() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="mt-3 grid gap-2 text-xs font-medium text-slate-700">
+              按模板标签筛选
+              <input
+                aria-label="按模板标签筛选"
+                className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={templateTagFilter}
+                onChange={(event) => setTemplateTagFilter(event.target.value)}
+                placeholder="本地生活"
+              />
             </label>
             {templates.length ? (
               <div className="mt-4 grid gap-3">
@@ -1374,6 +1440,11 @@ export default function ReelStructWorkspace() {
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                       <span className="rounded-full bg-white px-2.5 py-1">槽位 {item.slot_count}</span>
                       <span className="rounded-full bg-white px-2.5 py-1">来源 {item.source_run_id}</span>
+                      {item.tags.map((tag) => (
+                        <span key={`${item.template_id}-${tag}`} className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                          标签 {tag}
+                        </span>
+                      ))}
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600">{item.rhythm_summary}</p>
                     <p className="mt-2 text-xs text-slate-500">{formatRunTime(item.created_at)}</p>
@@ -1425,6 +1496,20 @@ export default function ReelStructWorkspace() {
                         setTemplateEditorDraft({
                           ...templateEditorDraft,
                           rhythm_summary: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    编辑模板标签
+                    <input
+                      aria-label="编辑模板标签"
+                      className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                      value={templateEditorDraft.tags}
+                      onChange={(event) =>
+                        setTemplateEditorDraft({
+                          ...templateEditorDraft,
+                          tags: event.target.value,
                         })
                       }
                     />
@@ -1570,6 +1655,11 @@ export default function ReelStructWorkspace() {
                       {item.template_title ? (
                         <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">模板 {item.template_title}</span>
                       ) : null}
+                      {item.template_tags.map((tag) => (
+                        <span key={`${item.run_id}-${tag}`} className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                          标签 {tag}
+                        </span>
+                      ))}
                       <span className="rounded-full bg-white px-2.5 py-1">缺口 {item.gap_count}</span>
                       <span className="rounded-full bg-white px-2.5 py-1">需求单 {item.material_request_count}</span>
                       <span className="rounded-full bg-white px-2.5 py-1">{item.status}</span>
