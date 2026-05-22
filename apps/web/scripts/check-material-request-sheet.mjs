@@ -17,6 +17,7 @@ try {
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: baseUrl });
   const page = await context.newPage();
   await page.goto(baseUrl, { waitUntil: "networkidle" });
+  await page.getByLabel("输出版本").selectOption("high_click");
   await page.getByRole("button", { name: "生成迁移 demo" }).click();
   await page.waitForTimeout(3000);
 
@@ -88,10 +89,10 @@ try {
   if (!bodyTextAfterSearchMiss.includes("没有匹配的 run 记录。")) {
     throw new Error("missing empty search state");
   }
-  await page.getByLabel("搜索记录").fill("巷口手作咖啡");
+  await page.getByLabel("搜索记录").fill("高点击版");
   await page.waitForTimeout(300);
   const bodyTextAfterSearchHit = await page.locator("body").innerText();
-  if (!bodyTextAfterSearchHit.includes("巷口手作咖啡 结构迁移方案")) {
+  if (!bodyTextAfterSearchHit.includes("巷口手作咖啡 高点击版结构迁移方案")) {
     throw new Error("missing matched search result");
   }
   await page.getByLabel("搜索记录").fill("");
@@ -107,6 +108,9 @@ try {
   const bodyTextAfterPin = await page.locator("body").innerText();
   if (!bodyTextAfterPin.includes("已置顶")) {
     throw new Error("missing pinned run state");
+  }
+  if (!bodyTextAfterPin.includes("Variant: 高点击版") || !bodyTextAfterPin.includes("高点击版")) {
+    throw new Error("missing selected output variant state");
   }
   const firstCurrentRunMatch = bodyTextAfterPin.match(/Run:\s*(demo-[a-z0-9]{8})/);
   if (!firstCurrentRunMatch) {
@@ -172,12 +176,18 @@ try {
   if (!firstJsonText.includes("\"pinned\": true")) {
     throw new Error("missing persisted pinned state in exported json");
   }
+  if (!firstJsonText.includes("\"variant\": \"high_click\"")) {
+    throw new Error("missing persisted output variant in exported json");
+  }
 
   await page.getByRole("button", { name: "生成迁移 demo" }).click();
   await page.waitForTimeout(3000);
   const bodyTextAfterTemplateRun = await page.locator("body").innerText();
   if (!bodyTextAfterTemplateRun.includes(`Template: ${editedTemplateTitle}`)) {
     throw new Error("missing applied template state on current run");
+  }
+  if (!bodyTextAfterTemplateRun.includes("Variant: 高点击版")) {
+    throw new Error("missing applied output variant on current run");
   }
   if (!bodyTextAfterTemplateRun.includes("Tags: 餐饮 / 本地生活 / 夜咖")) {
     throw new Error("missing inherited template tags on current run");
@@ -240,6 +250,9 @@ try {
   }
   if (!jsonText.includes("\"template_tags\": [") || !jsonText.includes("\"夜咖\"")) {
     throw new Error("missing persisted template tags in exported json");
+  }
+  if (!jsonText.includes("\"variant\": \"high_click\"")) {
+    throw new Error("missing persisted output variant in exported templated json");
   }
 
   const currentRunMatch = bodyTextAfterRollbackRun.match(/Run:\s*(demo-[a-z0-9]{8})/);

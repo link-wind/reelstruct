@@ -72,6 +72,7 @@ def list_demo_run_records(
                     template_id=payload.get("template_id", ""),
                     template_title=payload.get("template_title", ""),
                     template_tags=payload.get("template_tags", []),
+                    variant=payload.get("variant", transfer_plan.get("variant", "standard")),
                     title=transfer_plan.get("title", "未命名迁移任务"),
                     target_topic=transfer_plan.get("target_topic", ""),
                     gap_count=len(transfer_plan.get("gaps", [])),
@@ -101,6 +102,7 @@ def list_demo_run_records(
             or needle in item.note.lower()
             or needle in item.template_title.lower()
             or needle in " ".join(item.template_tags).lower()
+            or needle in item.variant.lower()
         ]
     return items[:limit]
 

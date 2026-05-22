@@ -131,6 +131,43 @@ def test_create_demo_run_returns_material_request_sheet_from_request():
     ]
 
 
+def test_create_demo_run_persists_output_variant_to_detail_and_list():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "多版本样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "多版本短视频",
+                "product_name": "多版本门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "variant": "high_click",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    run_id = body["run_id"]
+    detail_response = client.get(f"/api/runs/{run_id}")
+    list_response = client.get("/api/runs", params={"q": "高点击版"})
+
+    assert body["variant"] == "high_click"
+    assert body["preview"]["transfer_plan"]["variant"] == "high_click"
+    assert "高点击版" in body["preview"]["transfer_plan"]["title"]
+    assert detail_response.status_code == 200
+    assert detail_response.json()["variant"] == "high_click"
+    assert list_response.status_code == 200
+    assert any(item["run_id"] == run_id and item["variant"] == "high_click" for item in list_response.json())
+
+
 def test_get_saved_demo_run_returns_snapshot():
     client = TestClient(app)
 

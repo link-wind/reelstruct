@@ -217,3 +217,55 @@ def test_build_structure_preview_can_use_saved_template_structure():
     assert slot_lookup["hook"].duration == 4.0
     assert slot_lookup["cta"].start == 17.0
     assert response.composition.duration == 20.0
+
+
+def test_build_structure_preview_applies_output_variant_styles():
+    click_response = build_structure_preview(
+        sample=SampleVideoInput(title="咖啡样例", duration=20, shot_count=6),
+        content=NewContentInput(
+            topic="咖啡店开业",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        variant="high_click",
+    )
+    conversion_response = build_structure_preview(
+        sample=SampleVideoInput(title="咖啡样例", duration=20, shot_count=6),
+        content=NewContentInput(
+            topic="咖啡店开业",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        variant="high_conversion",
+    )
+    rhythm_response = build_structure_preview(
+        sample=SampleVideoInput(title="咖啡样例", duration=20, shot_count=6),
+        content=NewContentInput(
+            topic="咖啡店开业",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        variant="fast_rhythm",
+    )
+
+    click_mapping_lookup = {item.slot_id: item for item in click_response.transfer_plan.mappings}
+    conversion_mapping_lookup = {item.slot_id: item for item in conversion_response.transfer_plan.mappings}
+    rhythm_slot_lookup = {item.id: item for item in rhythm_response.template.script_pattern}
+
+    assert click_response.transfer_plan.variant == "high_click"
+    assert "高点击版" in click_response.transfer_plan.title
+    assert "前 2 秒" in click_mapping_lookup["hook"].target_message
+    assert "强钩子" in click_response.template.packaging_notes
+
+    assert conversion_response.transfer_plan.variant == "high_conversion"
+    assert "高转化版" in conversion_response.transfer_plan.title
+    assert "行动理由" in conversion_mapping_lookup["cta"].target_message
+    assert "转化 CTA" in conversion_response.template.packaging_notes
+
+    assert rhythm_response.transfer_plan.variant == "fast_rhythm"
+    assert "高节奏版" in rhythm_response.transfer_plan.title
+    assert rhythm_slot_lookup["hook"].duration < 3
+    assert rhythm_response.composition.duration < 20

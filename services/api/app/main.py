@@ -76,6 +76,7 @@ def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePre
         template_override=template_record.template if template_record else None,
         mapping_overrides=request.mapping_overrides,
         material_request_sheet=request.material_request_sheet,
+        variant=request.variant,
     )
 
 

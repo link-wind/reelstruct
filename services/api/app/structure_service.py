@@ -25,14 +25,17 @@ def build_structure_preview(
     template_override: Optional[TemplateStructure] = None,
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
     material_request_sheet: Optional[list[MaterialRequestTask]] = None,
+    variant: str = "standard",
 ) -> StructurePreviewResponse:
     template = template_override.model_copy(deep=True) if template_override is not None else extract_template_structure(sample)
+    template = apply_variant_to_template(template, variant)
     template = apply_slot_level_overrides(template, mapping_overrides)
     gaps = detect_material_gaps(template, content)
     transfer_plan = build_transfer_plan(
         template,
         content,
         gaps,
+        variant=variant,
         mapping_overrides=mapping_overrides,
         material_request_sheet=material_request_sheet,
     )
@@ -129,6 +132,7 @@ def build_transfer_plan(
     template: TemplateStructure,
     content: NewContentInput,
     gaps: list[MaterialGap],
+    variant: str = "standard",
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
     material_request_sheet: Optional[list[MaterialRequestTask]] = None,
 ) -> TransferPlan:
@@ -141,7 +145,7 @@ def build_transfer_plan(
         target_message = (
             override.target_message.strip()
             if override and override.target_message.strip()
-            else _target_message_for_slot(slot.id, content)
+            else _target_message_for_slot(slot.id, content, variant)
         )
         asset_strategy = build_asset_strategy(slot, gap_lookup.get(slot.id), override)
         mappings.append(
@@ -154,9 +158,11 @@ def build_transfer_plan(
         )
 
     title = content.product_name or content.topic
+    variant_label = _variant_label(variant)
     return TransferPlan(
-        title=f"{title} 结构迁移方案",
+        title=f"{title} {variant_label}结构迁移方案",
         target_topic=content.topic,
+        variant=variant,
         mappings=mappings,
         gaps=gaps,
         material_request_sheet=build_material_request_sheet(template, gaps, material_request_sheet),
@@ -230,11 +236,35 @@ def build_composition_spec(
     return CompositionSpec(duration=round(total_duration, 1), tracks=tracks)
 
 
-def _target_message_for_slot(slot_id: str, content: NewContentInput) -> str:
+def _target_message_for_slot(slot_id: str, content: NewContentInput, variant: str = "standard") -> str:
     product = content.product_name or content.topic
     first_point = content.selling_points[0] if content.selling_points else "核心卖点"
     second_point = content.selling_points[1] if len(content.selling_points) > 1 else first_point
 
+    if variant == "high_click":
+        if slot_id == "hook":
+            return f"前 2 秒抛出反差问题：为什么 {product} 会让人停下来"
+        if slot_id == "selling_points":
+            return f"先给最强利益点 {first_point}，再用 {second_point} 放大好奇心"
+        if slot_id == "usage":
+            return f"用一个真实瞬间证明 {product} 不是普通选择"
+        return f"用一句强 CTA 收束：现在就记住 {product}"
+    if variant == "high_conversion":
+        if slot_id == "hook":
+            return f"先明确 {product} 解决的具体需求"
+        if slot_id == "selling_points":
+            return f"把 {first_point} 和 {second_point} 转成可感知的购买理由"
+        if slot_id == "usage":
+            return f"展示 {product} 的使用场景，并补足信任细节"
+        return f"给出行动理由，引导用户立即完成咨询、到店或下单"
+    if variant == "fast_rhythm":
+        if slot_id == "hook":
+            return f"快速点题：{product} 的最大亮点"
+        if slot_id == "selling_points":
+            return f"{first_point} / {second_point} 连续快切"
+        if slot_id == "usage":
+            return f"用短镜头展示 {product} 的关键使用过程"
+        return f"用短 CTA 记住 {product}"
     if slot_id == "hook":
         return f"用 3 秒说明：为什么现在需要 {product}"
     if slot_id == "selling_points":
@@ -242,6 +272,81 @@ def _target_message_for_slot(slot_id: str, content: NewContentInput) -> str:
     if slot_id == "usage":
         return f"展示 {product} 在真实场景里的使用过程"
     return f"引导用户记住 {product} 并完成下一步行动"
+
+
+def apply_variant_to_template(template: TemplateStructure, variant: str) -> TemplateStructure:
+    if variant == "standard":
+        return template
+
+    notes = [*template.packaging_notes, *_variant_packaging_notes(variant)]
+    slots = template.script_pattern
+    rhythm_summary = f"{template.rhythm_summary} / {_variant_label(variant)}输出。"
+
+    if variant == "fast_rhythm":
+        slots = _compress_slots_for_fast_rhythm(slots)
+        rhythm_summary = f"高节奏快切版，整体压缩到 {round(slots[-1].start + slots[-1].duration, 1)} 秒，前段更快进入卖点。"
+
+    analysis = template.analysis_summary.model_copy(
+        update={"packaging_signals": [*template.analysis_summary.packaging_signals, *_variant_packaging_notes(variant)]}
+    )
+    return template.model_copy(
+        update={
+            "script_pattern": slots,
+            "rhythm_summary": rhythm_summary,
+            "packaging_notes": _dedupe(notes),
+            "analysis_summary": analysis,
+        }
+    )
+
+
+def _compress_slots_for_fast_rhythm(slots: list[StructureSlot]) -> list[StructureSlot]:
+    duration_by_slot = {
+        "hook": 2.0,
+        "selling_points": 5.0,
+        "usage": 4.0,
+        "cta": 2.0,
+    }
+    next_start = 0.0
+    compressed: list[StructureSlot] = []
+    for slot in slots:
+        duration = min(slot.duration, duration_by_slot.get(slot.id, max(round(slot.duration * 0.72, 1), 1.5)))
+        compressed.append(
+            slot.model_copy(
+                update={
+                    "start": round(next_start, 1),
+                    "duration": round(duration, 1),
+                }
+            )
+        )
+        next_start += duration
+    return compressed
+
+
+def _variant_label(variant: str) -> str:
+    labels = {
+        "standard": "",
+        "high_click": "高点击版",
+        "high_conversion": "高转化版",
+        "fast_rhythm": "高节奏版",
+    }
+    return labels.get(variant, "")
+
+
+def _variant_packaging_notes(variant: str) -> list[str]:
+    notes = {
+        "high_click": ["强钩子", "反差标题", "高停留字幕"],
+        "high_conversion": ["信任背书", "转化 CTA", "行动理由"],
+        "fast_rhythm": ["快切节奏", "短字幕", "高密度镜头"],
+    }
+    return notes.get(variant, [])
+
+
+def _dedupe(items: list[str]) -> list[str]:
+    deduped: list[str] = []
+    for item in items:
+        if item and item not in deduped:
+            deduped.append(item)
+    return deduped
 
 
 def _fill_strategy_for_slot(slot_id: str) -> str:

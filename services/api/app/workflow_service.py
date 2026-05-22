@@ -42,6 +42,7 @@ def create_demo_run(
         template_override=template_override,
         mapping_overrides=request.mapping_overrides,
         material_request_sheet=request.material_request_sheet,
+        variant=request.variant,
     )
     trace.append(
         RunTraceEvent(
@@ -87,6 +88,7 @@ def create_demo_run(
         template_id=template_id,
         template_title=template_title,
         template_tags=template_tags or [],
+        variant=request.variant,
         preview=preview,
         prepared_assets=[
             RenderClipPreview(

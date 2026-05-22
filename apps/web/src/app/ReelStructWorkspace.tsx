@@ -69,6 +69,7 @@ type StructurePreviewResponse = {
   transfer_plan: {
     title: string
     target_topic: string
+    variant: OutputVariant
     mappings: TransferMapping[]
     gaps: MaterialGap[]
     material_request_sheet: MaterialRequestTask[]
@@ -111,6 +112,7 @@ type DemoRunResponse = {
   template_id: string
   template_title: string
   template_tags: string[]
+  variant: OutputVariant
   note: string
   preview: StructurePreviewResponse
   prepared_assets: RenderClipPreview[]
@@ -126,6 +128,7 @@ type RunRecordSummary = {
   template_id: string
   template_title: string
   template_tags: string[]
+  variant: OutputVariant
   title: string
   target_topic: string
   gap_count: number
@@ -165,6 +168,8 @@ type StructureTemplateSummary = {
 }
 
 type RunStatusFilter = 'all' | 'succeeded'
+
+type OutputVariant = 'standard' | 'high_click' | 'high_conversion' | 'fast_rhythm'
 
 type SampleVideoInput = {
   title: string
@@ -258,6 +263,13 @@ const defaultContent: NewContentInput = {
   available_assets: ['开头吸引镜头', '使用过程镜头'],
 }
 
+const outputVariants: Array<{ value: OutputVariant; label: string }> = [
+  { value: 'standard', label: '默认版' },
+  { value: 'high_click', label: '高点击版' },
+  { value: 'high_conversion', label: '高转化版' },
+  { value: 'fast_rhythm', label: '高节奏版' },
+]
+
 export default function ReelStructWorkspace() {
   const [preview, setPreview] = useState<StructurePreviewResponse | null>(null)
   const [run, setRun] = useState<DemoRunResponse | null>(null)
@@ -280,6 +292,7 @@ export default function ReelStructWorkspace() {
   const [templateTagFilter, setTemplateTagFilter] = useState('')
   const [runTemplateFilter, setRunTemplateFilter] = useState('')
   const [runTagFilter, setRunTagFilter] = useState('')
+  const [outputVariant, setOutputVariant] = useState<OutputVariant>('standard')
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
   const [runSearchKeyword, setRunSearchKeyword] = useState('')
   const [runNoteDraft, setRunNoteDraft] = useState('')
@@ -435,6 +448,7 @@ export default function ReelStructWorkspace() {
           sample,
           content,
           template_id: selectedTemplateId,
+          variant: outputVariant,
           mapping_overrides,
           material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
         },
@@ -618,6 +632,7 @@ export default function ReelStructWorkspace() {
       }
       const payload = (await response.json()) as DemoRunResponse
       setRun(payload)
+      setOutputVariant(payload.variant || payload.preview.transfer_plan.variant || 'standard')
       setSelectedTemplateId(payload.template_id || '')
       setPreview(payload.preview)
       setSlotDrafts(buildSlotDrafts(payload.preview))
@@ -1016,6 +1031,21 @@ export default function ReelStructWorkspace() {
                 onChange={(event) => setContent({ ...content, available_assets: splitList(event.target.value) })}
               />
             </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700 md:col-span-2">
+              输出版本
+              <select
+                aria-label="输出版本"
+                className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={outputVariant}
+                onChange={(event) => setOutputVariant(event.target.value as OutputVariant)}
+              >
+                {outputVariants.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         </div>
       </section>
@@ -1088,6 +1118,9 @@ export default function ReelStructWorkspace() {
               </h2>
             </div>
             <div className="flex items-center gap-3">
+              <span className="rounded-full bg-sky-50 px-3 py-1 text-sm font-medium text-sky-700">
+                {variantLabel(preview?.transfer_plan.variant || outputVariant)}
+              </span>
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-mint">
                 {preview ? `${preview.composition.duration}s` : 'P0 闭环'}
               </span>
@@ -1215,6 +1248,7 @@ export default function ReelStructWorkspace() {
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
             <p>Pinned: {run?.pinned ? '已置顶' : '未置顶'}</p>
+            <p>Variant: {variantLabel(run?.variant || preview?.transfer_plan.variant || outputVariant)}</p>
             <p>Template: {run?.template_title || selectedTemplate?.title || '默认样例结构'}</p>
             <p>Tags: {(run?.template_tags.length ? run.template_tags : selectedTemplate?.tags || []).join(' / ') || '--'}</p>
           </div>
@@ -1652,6 +1686,9 @@ export default function ReelStructWorkspace() {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                       {item.pinned ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">已置顶</span> : null}
+                      <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
+                        {variantLabel(item.variant)}
+                      </span>
                       {item.template_title ? (
                         <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">模板 {item.template_title}</span>
                       ) : null}
@@ -1982,6 +2019,10 @@ function labelForSlot(slotId: string): string {
     cta: 'CTA',
   }
   return labelMap[slotId] || slotId
+}
+
+function variantLabel(variant: OutputVariant): string {
+  return outputVariants.find((item) => item.value === variant)?.label || '默认版'
 }
 
 const materialTaskStatuses: MaterialTaskStatus[] = ['待补拍', '已拍', '已交付']

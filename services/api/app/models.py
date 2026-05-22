@@ -99,6 +99,7 @@ class MaterialRequestTask(BaseModel):
 class TransferPlan(BaseModel):
     title: str
     target_topic: str
+    variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"] = "standard"
     mappings: list[TransferMapping]
     gaps: list[MaterialGap] = Field(default_factory=list)
     material_request_sheet: list[MaterialRequestTask] = Field(default_factory=list)
@@ -154,6 +155,7 @@ class RunRecordSummary(BaseModel):
     template_id: str = ""
     template_title: str = ""
     template_tags: list[str] = Field(default_factory=list)
+    variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"] = "standard"
     title: str
     target_topic: str = ""
     gap_count: int = 0
@@ -170,6 +172,7 @@ class DemoRunResponse(BaseModel):
     template_id: str = ""
     template_title: str = ""
     template_tags: list[str] = Field(default_factory=list)
+    variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"] = "standard"
     note: str = ""
     preview: "StructurePreviewResponse"
     prepared_assets: list[RenderClipPreview] = Field(default_factory=list)
@@ -232,6 +235,7 @@ class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput
     template_id: str = ""
+    variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"] = "standard"
     mapping_overrides: list[TransferMappingOverride] = Field(default_factory=list)
     material_request_sheet: list[MaterialRequestTask] = Field(default_factory=list)
 
