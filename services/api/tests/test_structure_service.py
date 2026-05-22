@@ -57,3 +57,29 @@ def test_build_structure_preview_uses_transcript_summary_for_hook_and_cta_eviden
     evidence_lookup = {slot.id: slot.sample_evidence for slot in response.template.script_pattern}
     assert "先讲熬夜脸很垮" in evidence_lookup["hook"]
     assert "最后引导现在下单" in evidence_lookup["cta"]
+
+
+def test_build_structure_preview_returns_sample_analysis_summary():
+    response = build_structure_preview(
+        sample=SampleVideoInput(
+            title="护肤样例",
+            duration=18,
+            shot_count=5,
+            transcript_summary="先讲熬夜脸很垮。再展示精华上脸效果。最后引导现在下单。",
+        ),
+        content=NewContentInput(
+            topic="新品精华短视频",
+            selling_points=["修护透亮"],
+            available_assets=["开头吸引镜头", "商品特写镜头", "使用过程镜头", "结尾 CTA 镜头"],
+        ),
+    )
+
+    analysis = response.template.analysis_summary
+    assert analysis.headline == "护肤样例 样例拆解"
+    metric_lookup = {item.label: item.value for item in analysis.metrics}
+    assert metric_lookup["时长"] == "18.0s"
+    assert metric_lookup["镜头数"] == "5"
+    assert metric_lookup["转写"] == "已提供"
+    beat_lookup = {item.slot_id: item.evidence for item in analysis.narrative_beats}
+    assert beat_lookup["hook"] == "先讲熬夜脸很垮"
+    assert beat_lookup["cta"] == "最后引导现在下单"

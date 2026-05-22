@@ -41,6 +41,20 @@ type StructurePreviewResponse = {
     script_pattern: StructureSlot[]
     rhythm_summary: string
     packaging_notes: string[]
+    analysis_summary: {
+      headline: string
+      metrics: Array<{
+        label: string
+        value: string
+        detail: string
+      }>
+      narrative_beats: Array<{
+        slot_id: string
+        label: string
+        evidence: string
+      }>
+      packaging_signals: string[]
+    }
   }
   transfer_plan: {
     title: string
@@ -448,6 +462,56 @@ export default function ReelStructWorkspace() {
         </section>
       ) : null}
 
+      <section className="mx-auto max-w-7xl px-6 pb-6">
+        <div className="rounded-lg border border-line bg-white p-5 shadow-panel">
+          <div className="flex items-center justify-between gap-4 border-b border-line pb-4">
+            <div>
+              <p className="text-sm font-semibold text-signal">样例拆解依据</p>
+              <h2 className="mt-1 text-2xl font-semibold">
+                {preview?.template.analysis_summary.headline || '样例解析结果'}
+              </h2>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
+              {preview?.template.rhythm_summary || '等待生成后展示'}
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[320px_1fr]">
+            <div className="grid gap-3">
+              {(preview?.template.analysis_summary.metrics || fallbackAnalysis.metrics).map((metric) => (
+                <article key={metric.label} className="rounded-md border border-line p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{metric.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-ink">{metric.value}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{metric.detail}</p>
+                </article>
+              ))}
+            </div>
+
+            <div className="grid gap-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                {(preview?.template.analysis_summary.narrative_beats || fallbackAnalysis.narrative_beats).map((beat) => (
+                  <article key={beat.slot_id} className="rounded-md border border-line p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{beat.label}</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-700">{beat.evidence}</p>
+                  </article>
+                ))}
+              </div>
+
+              <div className="rounded-md border border-line p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">包装信号</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(preview?.template.analysis_summary.packaging_signals || fallbackAnalysis.packaging_signals).map((item) => (
+                    <span key={item} className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="mx-auto grid max-w-7xl gap-6 px-6 pb-10 lg:grid-cols-[1fr_420px]">
         <div className="rounded-lg border border-line bg-white p-5 shadow-panel">
           <div className="flex items-center justify-between gap-4 border-b border-line pb-4">
@@ -697,3 +761,17 @@ const fallbackTrace: RunTraceEvent[] = [
     progress: 0,
   },
 ]
+
+const fallbackAnalysis = {
+  metrics: [
+    { label: '时长', value: '20.0s', detail: '样例总时长' },
+    { label: '镜头数', value: '6', detail: 'scene detect / 节奏估算' },
+    { label: '转写', value: '已提供', detail: '用于提取 hook / usage / CTA 依据' },
+  ],
+  narrative_beats: [
+    { slot_id: 'hook', label: 'Hook', evidence: '先用拉花特写吸引注意' },
+    { slot_id: 'usage', label: '使用过程', evidence: '再展示手作过程和门店氛围' },
+    { slot_id: 'cta', label: 'CTA', evidence: '结尾给到行动引导' },
+  ],
+  packaging_signals: ['高密度字幕', '卖点标题卡片', '结尾行动号召'],
+}

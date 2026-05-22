@@ -5,6 +5,9 @@ from app.models import (
     CompositionTrack,
     MaterialGap,
     NewContentInput,
+    SampleAnalysisBeat,
+    SampleAnalysisMetric,
+    SampleAnalysisSummary,
     SampleVideoInput,
     StructurePreviewResponse,
     StructureSlot,
@@ -84,6 +87,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
         script_pattern=slots,
         rhythm_summary=f"约 {sample.shot_count} 个镜头 / {round(duration, 1)} 秒，开头快、中段密集、结尾收束。",
         packaging_notes=build_packaging_notes(sample.transcript_summary),
+        analysis_summary=build_analysis_summary(sample, slots),
     )
 
 
@@ -241,3 +245,23 @@ def build_packaging_notes(transcript_summary: str) -> list[str]:
     if transcript_summary.strip():
         notes.append("口播驱动结构")
     return notes
+
+
+def build_analysis_summary(sample: SampleVideoInput, slots: list[StructureSlot]) -> SampleAnalysisSummary:
+    return SampleAnalysisSummary(
+        headline=f"{sample.title} 样例拆解",
+        metrics=[
+            SampleAnalysisMetric(label="时长", value=f"{round(sample.duration, 1)}s", detail="样例总时长"),
+            SampleAnalysisMetric(label="镜头数", value=str(sample.shot_count), detail="scene detect / 节奏估算"),
+            SampleAnalysisMetric(
+                label="转写",
+                value="已提供" if sample.transcript_summary.strip() else "未提供",
+                detail="用于提取 hook / usage / CTA 依据",
+            ),
+        ],
+        narrative_beats=[
+            SampleAnalysisBeat(slot_id=slot.id, label=slot.label, evidence=slot.sample_evidence)
+            for slot in slots
+        ],
+        packaging_signals=build_packaging_notes(sample.transcript_summary),
+    )

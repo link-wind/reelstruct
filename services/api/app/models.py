@@ -40,11 +40,31 @@ class StructureSlot(BaseModel):
     sample_evidence: str
 
 
+class SampleAnalysisMetric(BaseModel):
+    label: str
+    value: str
+    detail: str = ""
+
+
+class SampleAnalysisBeat(BaseModel):
+    slot_id: str
+    label: str
+    evidence: str
+
+
+class SampleAnalysisSummary(BaseModel):
+    headline: str
+    metrics: list[SampleAnalysisMetric] = Field(default_factory=list)
+    narrative_beats: list[SampleAnalysisBeat] = Field(default_factory=list)
+    packaging_signals: list[str] = Field(default_factory=list)
+
+
 class TemplateStructure(BaseModel):
     title: str
     script_pattern: list[StructureSlot]
     rhythm_summary: str
     packaging_notes: list[str] = Field(default_factory=list)
+    analysis_summary: SampleAnalysisSummary
 
 
 class MaterialGap(BaseModel):
