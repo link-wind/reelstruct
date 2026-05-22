@@ -155,16 +155,22 @@ class RunRecordSummary(BaseModel):
     gap_count: int = 0
     material_request_count: int = 0
     video_url: str = ""
+    note: str = ""
 
 
 class DemoRunResponse(BaseModel):
     run_id: str
     created_at: str = ""
     status: Literal["succeeded", "failed"]
+    note: str = ""
     preview: "StructurePreviewResponse"
     prepared_assets: list[RenderClipPreview] = Field(default_factory=list)
     rendered_video: RenderDemoResponse
     trace: list[RunTraceEvent] = Field(default_factory=list)
+
+
+class RunNoteUpdateRequest(BaseModel):
+    note: str = ""
 
 
 class StructurePreviewRequest(BaseModel):

@@ -10,6 +10,7 @@ from app.models import (
     PrepareDemoAssetsResponse,
     RenderClipPreview,
     RenderDemoResponse,
+    RunNoteUpdateRequest,
     RunRecordSummary,
     SampleUploadResponse,
     TranscriptUploadResponse,
@@ -17,7 +18,12 @@ from app.models import (
     StructurePreviewResponse,
 )
 from app.render_service import render_demo_video
-from app.run_record_service import delete_demo_run_record, list_demo_run_records, load_demo_run_record
+from app.run_record_service import (
+    delete_demo_run_record,
+    list_demo_run_records,
+    load_demo_run_record,
+    update_demo_run_note,
+)
 from app.sample_service import extract_transcript_upload, save_sample_upload
 from app.structure_service import build_structure_preview
 from app.workflow_service import create_demo_run
@@ -73,6 +79,14 @@ def delete_run_record(run_id: str) -> Response:
     if not deleted:
         raise HTTPException(status_code=404, detail="Run not found")
     return Response(status_code=204)
+
+
+@app.patch("/api/runs/{run_id}/note", response_model=DemoRunResponse)
+def patch_run_note(run_id: str, request: RunNoteUpdateRequest) -> DemoRunResponse:
+    record = update_demo_run_note(run_id, request.note, RUNS_DIR)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return record
 
 
 @app.get("/api/runs", response_model=list[RunRecordSummary])

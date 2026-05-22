@@ -95,6 +95,13 @@ try {
     throw new Error("missing matched search result");
   }
   await page.getByLabel("搜索记录").fill("");
+  await page.getByLabel("run 备注").fill("优先补拍卖点特写");
+  await page.getByRole("button", { name: "保存备注" }).click();
+  await page.waitForTimeout(500);
+  const bodyTextAfterNoteSave = await page.locator("body").innerText();
+  if (!bodyTextAfterNoteSave.includes("优先补拍卖点特写")) {
+    throw new Error("missing saved run note");
+  }
 
   const [jsonDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -107,6 +114,9 @@ try {
   }
   if (!jsonText.includes("\"status\": \"已拍\"")) {
     throw new Error("missing persisted status in exported run json");
+  }
+  if (!jsonText.includes("\"note\": \"优先补拍卖点特写\"")) {
+    throw new Error("missing persisted run note in exported json");
   }
 
   const firstRunId = await page.locator('text=/demo-[a-z0-9]{8}/').first().innerText();

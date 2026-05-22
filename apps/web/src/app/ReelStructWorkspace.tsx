@@ -107,6 +107,7 @@ type DemoRunResponse = {
   run_id: string
   created_at: string
   status: 'succeeded' | 'failed'
+  note: string
   preview: StructurePreviewResponse
   prepared_assets: RenderClipPreview[]
   rendered_video: RenderDemoResponse
@@ -122,6 +123,7 @@ type RunRecordSummary = {
   gap_count: number
   material_request_count: number
   video_url: string
+  note: string
 }
 
 type RunStatusFilter = 'all' | 'succeeded'
@@ -221,6 +223,7 @@ export default function ReelStructWorkspace() {
   const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
   const [runSearchKeyword, setRunSearchKeyword] = useState('')
+  const [runNoteDraft, setRunNoteDraft] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
   const [error, setError] = useState('')
@@ -253,6 +256,10 @@ export default function ReelStructWorkspace() {
     setRequestSheetStatus(Object.fromEntries(nextRequestSheet.map((item) => [item.slot_id, item.status])))
     setRequestSheetFeedback('')
   }, [preview])
+
+  useEffect(() => {
+    setRunNoteDraft(run?.note ?? '')
+  }, [run])
 
   useEffect(() => {
     if (!requestSheetFeedback) return
@@ -487,6 +494,31 @@ export default function ReelStructWorkspace() {
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '删除记录失败')
+    }
+  }
+
+  const saveRunNote = async () => {
+    if (!run) return
+    try {
+      const response = await fetch(`/api/runs/${run.run_id}/note`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ note: runNoteDraft }),
+      })
+      if (!response.ok) {
+        throw new Error(`保存备注失败：${response.status}`)
+      }
+      const payload = (await response.json()) as DemoRunResponse
+      setRun(payload)
+      setRecentRuns((current) =>
+        current.map((item) => (item.run_id === payload.run_id ? { ...item, note: payload.note } : item)),
+      )
+      await fetchRecentRuns()
+      setStatus('run 备注已保存')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '保存备注失败')
     }
   }
 
@@ -862,6 +894,28 @@ export default function ReelStructWorkspace() {
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
           </div>
 
+          <div className="mt-3 grid gap-2">
+            <label className="grid gap-2 text-xs font-medium text-slate-700">
+              run 备注
+              <textarea
+                aria-label="run 备注"
+                className="min-h-20 rounded-md border border-line px-3 py-2 text-sm leading-6 text-ink outline-none focus:border-signal"
+                value={runNoteDraft}
+                onChange={(event) => setRunNoteDraft(event.target.value)}
+                placeholder="给这次迁移记录补一条备注"
+              />
+            </label>
+            <button
+              className="w-fit rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+              onClick={saveRunNote}
+              disabled={!run}
+              type="button"
+            >
+              保存备注
+            </button>
+            {run?.note ? <p className="text-sm leading-6 text-slate-700">{run.note}</p> : null}
+          </div>
+
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
@@ -954,6 +1008,7 @@ export default function ReelStructWorkspace() {
                       <span className="rounded-full bg-white px-2.5 py-1">{item.status}</span>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600">{item.target_topic}</p>
+                    {item.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.note}</p> : null}
                     <p className="mt-2 text-xs text-slate-500">{formatRunTime(item.created_at)}</p>
                   </article>
                 ))}

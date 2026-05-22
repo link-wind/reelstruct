@@ -28,6 +28,15 @@ def delete_demo_run_record(run_id: str, runs_dir: Path) -> bool:
     return True
 
 
+def update_demo_run_note(run_id: str, note: str, runs_dir: Path) -> Optional[DemoRunResponse]:
+    record = load_demo_run_record(run_id, runs_dir)
+    if record is None:
+        return None
+    updated = record.model_copy(update={"note": note})
+    save_demo_run_record(updated, runs_dir)
+    return updated
+
+
 def list_demo_run_records(
     runs_dir: Path,
     limit: int = 20,
@@ -53,6 +62,7 @@ def list_demo_run_records(
                     gap_count=len(transfer_plan.get("gaps", [])),
                     material_request_count=len(transfer_plan.get("material_request_sheet", [])),
                     video_url=payload.get("rendered_video", {}).get("video_url", ""),
+                    note=payload.get("note", ""),
                 ),
             )
         )
@@ -68,6 +78,7 @@ def list_demo_run_records(
             if needle in item.run_id.lower()
             or needle in item.title.lower()
             or needle in item.target_topic.lower()
+            or needle in item.note.lower()
         ]
     return items[:limit]
 
