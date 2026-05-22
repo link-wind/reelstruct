@@ -158,6 +158,9 @@ class RunRecordSummary(BaseModel):
     variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"] = "standard"
     title: str
     target_topic: str = ""
+    duration: float = 0
+    hook: str = ""
+    cta: str = ""
     gap_count: int = 0
     material_request_count: int = 0
     video_url: str = ""

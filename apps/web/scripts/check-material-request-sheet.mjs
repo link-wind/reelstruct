@@ -129,6 +129,15 @@ try {
   if (!bodyTextAfterPin.includes("Variant: 高点击版") || !bodyTextAfterPin.includes("高点击版")) {
     throw new Error("missing selected output variant state");
   }
+  if (!bodyTextAfterPin.includes("当前预览")) {
+    throw new Error("missing current run marker in recent run comparison");
+  }
+  if (!bodyTextAfterPin.includes("Hook：") || !bodyTextAfterPin.includes("CTA：")) {
+    throw new Error("missing hook and cta summaries in recent run comparison");
+  }
+  if (!bodyTextAfterPin.includes("前 2 秒抛出反差问题")) {
+    throw new Error("missing high-click hook text in recent run comparison");
+  }
   const firstCurrentRunMatch = bodyTextAfterPin.match(/Run:\s*(demo-[a-z0-9]{8})/);
   if (!firstCurrentRunMatch) {
     throw new Error("missing current run id");

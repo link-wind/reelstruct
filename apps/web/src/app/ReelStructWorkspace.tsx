@@ -131,6 +131,9 @@ type RunRecordSummary = {
   variant: OutputVariant
   title: string
   target_topic: string
+  duration: number
+  hook: string
+  cta: string
   gap_count: number
   material_request_count: number
   video_url: string
@@ -1753,52 +1756,72 @@ export default function ReelStructWorkspace() {
             </div>
             {recentRuns.length ? (
               <div className="mt-4 grid gap-3">
-                {recentRuns.slice(0, 5).map((item) => (
-                  <article key={item.run_id} className="rounded-md border border-line bg-slate-50 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <strong className="text-sm">{item.title}</strong>
-                        <p className="mt-1 text-xs text-slate-500">{item.run_id}</p>
+                {recentRuns.slice(0, 5).map((item) => {
+                  const isCurrentRun = item.run_id === run?.run_id
+                  return (
+                    <article
+                      key={item.run_id}
+                      className={`rounded-md border p-4 ${
+                        isCurrentRun ? 'border-signal bg-sky-50' : 'border-line bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <strong className="text-sm">{item.title}</strong>
+                          <p className="mt-1 text-xs text-slate-500">{item.run_id}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                            onClick={() => void loadRunRecord(item.run_id)}
+                            type="button"
+                          >
+                            载入记录
+                          </button>
+                          <button
+                            className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-coral"
+                            onClick={() => void deleteRunRecord(item.run_id)}
+                            type="button"
+                          >
+                            删除记录
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
-                          onClick={() => void loadRunRecord(item.run_id)}
-                          type="button"
-                        >
-                          载入记录
-                        </button>
-                        <button
-                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-coral"
-                          onClick={() => void deleteRunRecord(item.run_id)}
-                          type="button"
-                        >
-                          删除记录
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                      {item.pinned ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">已置顶</span> : null}
-                      <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
-                        {variantLabel(item.variant)}
-                      </span>
-                      {item.template_title ? (
-                        <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">模板 {item.template_title}</span>
-                      ) : null}
-                      {item.template_tags.map((tag) => (
-                        <span key={`${item.run_id}-${tag}`} className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                          标签 {tag}
+                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
+                        {isCurrentRun ? <span className="rounded-full bg-ink px-2.5 py-1 text-white">当前预览</span> : null}
+                        {item.pinned ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">已置顶</span> : null}
+                        <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
+                          {variantLabel(item.variant)}
                         </span>
-                      ))}
-                      <span className="rounded-full bg-white px-2.5 py-1">缺口 {item.gap_count}</span>
-                      <span className="rounded-full bg-white px-2.5 py-1">需求单 {item.material_request_count}</span>
-                      <span className="rounded-full bg-white px-2.5 py-1">{item.status}</span>
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-600">{item.target_topic}</p>
-                    {item.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.note}</p> : null}
-                    <p className="mt-2 text-xs text-slate-500">{formatRunTime(item.created_at)}</p>
-                  </article>
-                ))}
+                        {item.template_title ? (
+                          <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">模板 {item.template_title}</span>
+                        ) : null}
+                        {item.template_tags.map((tag) => (
+                          <span key={`${item.run_id}-${tag}`} className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                            标签 {tag}
+                          </span>
+                        ))}
+                        <span className="rounded-full bg-white px-2.5 py-1">缺口 {item.gap_count}</span>
+                        <span className="rounded-full bg-white px-2.5 py-1">需求单 {item.material_request_count}</span>
+                        <span className="rounded-full bg-white px-2.5 py-1">{item.duration}s</span>
+                        <span className="rounded-full bg-white px-2.5 py-1">{item.status}</span>
+                      </div>
+                      <div className="mt-3 grid gap-2 rounded-md bg-white/75 p-3 text-xs leading-5 text-slate-600">
+                        <p>
+                          <span className="font-semibold text-slate-700">Hook：</span>
+                          {item.hook || '--'}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-slate-700">CTA：</span>
+                          {item.cta || '--'}
+                        </p>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">{item.target_topic}</p>
+                      {item.note ? <p className="mt-2 text-sm leading-6 text-slate-700">{item.note}</p> : null}
+                      <p className="mt-2 text-xs text-slate-500">{formatRunTime(item.created_at)}</p>
+                    </article>
+                  )
+                })}
               </div>
             ) : (
               <p className="mt-3 text-sm leading-6 text-slate-600">

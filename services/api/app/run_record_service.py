@@ -60,6 +60,7 @@ def list_demo_run_records(
         payload = json.loads(path.read_text(encoding="utf-8"))
         preview = payload.get("preview", {})
         transfer_plan = preview.get("transfer_plan", {})
+        mapping_lookup = {item.get("slot_id"): item for item in transfer_plan.get("mappings", [])}
         created_at = payload.get("created_at") or _mtime_to_iso(path)
         summaries.append(
             (
@@ -75,6 +76,9 @@ def list_demo_run_records(
                     variant=payload.get("variant", transfer_plan.get("variant", "standard")),
                     title=transfer_plan.get("title", "未命名迁移任务"),
                     target_topic=transfer_plan.get("target_topic", ""),
+                    duration=preview.get("composition", {}).get("duration", 0),
+                    hook=mapping_lookup.get("hook", {}).get("target_message", ""),
+                    cta=mapping_lookup.get("cta", {}).get("target_message", ""),
                     gap_count=len(transfer_plan.get("gaps", [])),
                     material_request_count=len(transfer_plan.get("material_request_sheet", [])),
                     video_url=payload.get("rendered_video", {}).get("video_url", ""),

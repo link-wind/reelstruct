@@ -168,6 +168,39 @@ def test_create_demo_run_persists_output_variant_to_detail_and_list():
     assert any(item["run_id"] == run_id and item["variant"] == "high_click" for item in list_response.json())
 
 
+def test_list_saved_demo_runs_includes_key_message_summary():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "摘要对比样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "摘要对比短视频",
+                "product_name": "摘要对比门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "variant": "high_conversion",
+        },
+    )
+
+    assert response.status_code == 200
+    run_id = response.json()["run_id"]
+    list_response = client.get("/api/runs", params={"q": run_id})
+
+    assert list_response.status_code == 200
+    [summary] = [item for item in list_response.json() if item["run_id"] == run_id]
+    assert summary["duration"] == 20
+    assert summary["hook"] == "先明确 摘要对比门店 解决的具体需求"
+    assert summary["cta"] == "给出行动理由，引导用户立即完成咨询、到店或下单"
+
+
 def test_compare_structure_variants_returns_all_output_options():
     client = TestClient(app)
 
