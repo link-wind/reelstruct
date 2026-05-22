@@ -37,3 +37,23 @@ def test_build_structure_preview_uses_existing_assets_when_available():
 
     assert response.transfer_plan.gaps == []
     assert all("使用已有素材" in mapping.asset_strategy for mapping in response.transfer_plan.mappings)
+
+
+def test_build_structure_preview_uses_transcript_summary_for_hook_and_cta_evidence():
+    response = build_structure_preview(
+        sample=SampleVideoInput(
+            title="护肤样例",
+            duration=18,
+            shot_count=5,
+            transcript_summary="先讲熬夜脸很垮。再展示精华上脸效果。最后引导现在下单。",
+        ),
+        content=NewContentInput(
+            topic="新品精华短视频",
+            selling_points=["修护透亮"],
+            available_assets=["开头吸引镜头", "商品特写镜头", "使用过程镜头", "结尾 CTA 镜头"],
+        ),
+    )
+
+    evidence_lookup = {slot.id: slot.sample_evidence for slot in response.template.script_pattern}
+    assert "先讲熬夜脸很垮" in evidence_lookup["hook"]
+    assert "最后引导现在下单" in evidence_lookup["cta"]

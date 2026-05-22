@@ -11,11 +11,12 @@ from app.models import (
     RenderClipPreview,
     RenderDemoResponse,
     SampleUploadResponse,
+    TranscriptUploadResponse,
     StructurePreviewRequest,
     StructurePreviewResponse,
 )
 from app.render_service import render_demo_video
-from app.sample_service import save_sample_upload
+from app.sample_service import extract_transcript_upload, save_sample_upload
 from app.structure_service import build_structure_preview
 from app.workflow_service import create_demo_run
 
@@ -56,6 +57,11 @@ def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
 @app.post("/api/samples/upload", response_model=SampleUploadResponse)
 def upload_sample_video(file: UploadFile) -> SampleUploadResponse:
     return save_sample_upload(file, sample_dir=SAMPLES_DIR)
+
+
+@app.post("/api/samples/upload-transcript", response_model=TranscriptUploadResponse)
+def upload_sample_transcript(file: UploadFile) -> TranscriptUploadResponse:
+    return extract_transcript_upload(file)
 
 
 @app.post("/api/media/prepare-demo-assets", response_model=PrepareDemoAssetsResponse)

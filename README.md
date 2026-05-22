@@ -46,6 +46,7 @@ ReelStruct 是新项目，但不从零重写底层能力。第一阶段会复用
 当前已提供 demo 渲染接口：
 
 - `POST /api/samples/upload`：上传样例视频，保存文件并提取基础 metadata、真实时长和基础镜头数
+- `POST /api/samples/upload-transcript`：上传 txt / srt，提取可直接参与结构拆解的转写摘要
 - `POST /api/runs/demo`：一次性执行结构预览、fixture 素材准备、FFmpeg 渲染，并返回 trace
 - `POST /api/media/prepare-demo-assets`：根据 `CompositionSpec` 匹配并准备 fixture clips
 - `POST /api/media/render-demo`：根据 `CompositionSpec` 生成一个 demo MP4，返回 `/output/demo.mp4`
@@ -98,15 +99,17 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 
 ```text
 1. 可选：上传一个样例视频
-2. 编辑目标主题、商品名、卖点和已有素材
-3. 点击“生成迁移 demo”
-4. 在结构结果里直接改 hook / 卖点表达 / CTA 文案，再点“应用改稿并重生成”
+2. 可选：上传 txt / srt，或直接手动补充样例转写摘要
+3. 编辑目标主题、商品名、卖点和已有素材
+4. 点击“生成迁移 demo”
+5. 在结构结果里直接改 hook / 卖点表达 / CTA 文案，再点“应用改稿并重生成”
 ```
 
 页面会依次调用：
 
 ```text
 POST /api/samples/upload   # 可选
+POST /api/samples/upload-transcript   # 可选
 POST /api/runs/demo
 GET  /output/demo.mp4
 ```

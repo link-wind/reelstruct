@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
-from app.models import SampleUploadResponse, SampleVideoInput
+from app.models import SampleUploadResponse, SampleVideoInput, TranscriptUploadResponse
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -37,6 +37,16 @@ def save_sample_upload(file: UploadFile, *, sample_dir: Optional[Path] = None) -
             shot_count=shot_count,
             transcript_summary="已上传样例视频，第一版先基于时长和镜头节奏做结构拆解。",
         ),
+    )
+
+
+def extract_transcript_upload(file: UploadFile) -> TranscriptUploadResponse:
+    raw_bytes = file.file.read()
+    raw_text = raw_bytes.decode("utf-8", errors="ignore")
+    transcript_summary = normalize_transcript_text(raw_text)
+    return TranscriptUploadResponse(
+        filename=file.filename or "transcript.txt",
+        transcript_summary=transcript_summary,
     )
 
 
@@ -90,3 +100,17 @@ def detect_shot_count(path: Path, *, threshold: float = 0.3) -> Optional[int]:
     if result.returncode != 0 and scene_cuts == 0:
         return None
     return max(1, scene_cuts + 1)
+
+
+def normalize_transcript_text(raw_text: str) -> str:
+    cleaned_lines: list[str] = []
+    for line in raw_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.isdigit():
+            continue
+        if "-->" in stripped:
+            continue
+        cleaned_lines.append(stripped)
+    return " ".join(cleaned_lines)

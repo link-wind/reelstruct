@@ -38,6 +38,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
     middle_duration = max(duration - hook_duration - cta_duration, 6)
     selling_duration = round(middle_duration * 0.58, 1)
     usage_duration = round(middle_duration - selling_duration, 1)
+    transcript_beats = split_transcript_beats(sample.transcript_summary)
 
     slots = [
         StructureSlot(
@@ -47,7 +48,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
             duration=round(hook_duration, 1),
             purpose="开头制造注意力，快速给出痛点或结果承诺。",
             required_asset="开头吸引镜头",
-            sample_evidence=f"{sample.title} 在开头约 {round(hook_duration, 1)} 秒建立注意力。",
+            sample_evidence=transcript_beats["hook"] or f"{sample.title} 在开头约 {round(hook_duration, 1)} 秒建立注意力。",
         ),
         StructureSlot(
             id="selling_points",
@@ -65,7 +66,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
             duration=usage_duration,
             purpose="展示真实使用语境，降低理解成本。",
             required_asset="使用过程镜头",
-            sample_evidence=sample.transcript_summary or "样例在中后段补充场景说明。",
+            sample_evidence=transcript_beats["usage"] or sample.transcript_summary or "样例在中后段补充场景说明。",
         ),
         StructureSlot(
             id="cta",
@@ -74,7 +75,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
             duration=round(cta_duration, 1),
             purpose="收束行动号召，强化记忆点。",
             required_asset="结尾 CTA 镜头",
-            sample_evidence="样例结尾保留明确收束段落。",
+            sample_evidence=transcript_beats["cta"] or "样例结尾保留明确收束段落。",
         ),
     ]
 
@@ -82,7 +83,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
         title=f"{sample.title} 的可迁移结构",
         script_pattern=slots,
         rhythm_summary=f"约 {sample.shot_count} 个镜头 / {round(duration, 1)} 秒，开头快、中段密集、结尾收束。",
-        packaging_notes=["高密度字幕", "卖点标题卡片", "结尾行动号召"],
+        packaging_notes=build_packaging_notes(sample.transcript_summary),
     )
 
 
@@ -218,3 +219,25 @@ def _fill_strategy_for_slot(slot_id: str) -> str:
         "cta": "使用结尾标题卡片 + 行动号召字幕补足 CTA",
     }
     return strategies.get(slot_id, "使用字幕和包装元素补足表达")
+
+
+def split_transcript_beats(transcript_summary: str) -> dict[str, str]:
+    parts = [
+        item.strip()
+        for item in transcript_summary.replace("!", "。").replace("？", "。").split("。")
+        if item.strip()
+    ]
+    if not parts:
+        return {"hook": "", "usage": "", "cta": ""}
+    return {
+        "hook": parts[0],
+        "usage": "。".join(parts[1:-1]) if len(parts) > 2 else transcript_summary,
+        "cta": parts[-1] if len(parts) > 1 else "",
+    }
+
+
+def build_packaging_notes(transcript_summary: str) -> list[str]:
+    notes = ["高密度字幕", "卖点标题卡片", "结尾行动号召"]
+    if transcript_summary.strip():
+        notes.append("口播驱动结构")
+    return notes

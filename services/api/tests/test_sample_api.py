@@ -35,6 +35,32 @@ def test_upload_sample_video_detects_scene_based_shot_count():
     assert body["sample"]["shot_count"] >= 3
 
 
+def test_upload_transcript_file_returns_clean_summary():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/samples/upload-transcript",
+        files={
+            "file": (
+                "sample.srt",
+                (
+                    "1\n00:00:00,000 --> 00:00:01,000\n先讲熬夜脸很垮。\n\n"
+                    "2\n00:00:01,000 --> 00:00:02,500\n再展示精华上脸效果。\n\n"
+                    "3\n00:00:02,500 --> 00:00:03,000\n最后引导现在下单。"
+                ).encode("utf-8"),
+                "application/x-subrip",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["filename"] == "sample.srt"
+    assert "00:00:00,000" not in body["transcript_summary"]
+    assert "先讲熬夜脸很垮。" in body["transcript_summary"]
+    assert "最后引导现在下单。" in body["transcript_summary"]
+
+
 def create_tiny_video_bytes() -> bytes:
     from pathlib import Path
     import subprocess

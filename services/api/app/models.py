@@ -18,6 +18,11 @@ class SampleUploadResponse(BaseModel):
     sample: SampleVideoInput
 
 
+class TranscriptUploadResponse(BaseModel):
+    filename: str
+    transcript_summary: str
+
+
 class NewContentInput(BaseModel):
     topic: str
     product_name: str = ""

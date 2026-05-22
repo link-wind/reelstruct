@@ -108,6 +108,11 @@ type SampleUploadResponse = {
   sample: SampleVideoInput
 }
 
+type TranscriptUploadResponse = {
+  filename: string
+  transcript_summary: string
+}
+
 type TransferMappingOverride = {
   slot_id: string
   target_message: string
@@ -160,6 +165,7 @@ export default function ReelStructWorkspace() {
   const [sample, setSample] = useState<SampleVideoInput>(defaultSample)
   const [content, setContent] = useState<NewContentInput>(defaultContent)
   const [sampleUpload, setSampleUpload] = useState<SampleUploadResponse | null>(null)
+  const [transcriptUpload, setTranscriptUpload] = useState<TranscriptUploadResponse | null>(null)
   const [mappingDrafts, setMappingDrafts] = useState<Record<string, string>>({})
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
@@ -193,6 +199,35 @@ export default function ReelStructWorkspace() {
       setSampleUpload(upload)
       setSample(upload.sample)
       setStatus('样例已上传')
+    } catch (caught) {
+      setStatus('上传失败')
+      setError(caught instanceof Error ? caught.message : '未知错误')
+    }
+  }
+
+  const uploadTranscript = async (file: File | null) => {
+    if (!file) return
+
+    setError('')
+    setStatus('正在上传转写文本')
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const response = await fetch('/api/samples/upload-transcript', {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        throw new Error(`上传失败：${response.status} ${await response.text()}`)
+      }
+      const upload = (await response.json()) as TranscriptUploadResponse
+      setTranscriptUpload(upload)
+      setSample({
+        ...sample,
+        transcript_summary: upload.transcript_summary,
+      })
+      setStatus('转写摘要已更新')
     } catch (caught) {
       setStatus('上传失败')
       setError(caught instanceof Error ? caught.message : '未知错误')
@@ -287,12 +322,35 @@ export default function ReelStructWorkspace() {
               onChange={(event) => uploadSample(event.target.files?.[0] || null)}
             />
           </label>
+          <label className="mt-4 block rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+            <span className="font-medium text-ink">上传 txt / srt 转写</span>
+            <input
+              className="mt-3 block w-full text-sm"
+              type="file"
+              accept=".txt,.srt,text/plain,application/x-subrip"
+              onChange={(event) => uploadTranscript(event.target.files?.[0] || null)}
+            />
+          </label>
+          <label className="mt-4 grid gap-2 text-sm font-medium text-slate-700">
+            转写摘要
+            <textarea
+              className="min-h-28 rounded-md border border-line px-3 py-2 text-sm leading-6 text-ink outline-none focus:border-signal"
+              value={sample.transcript_summary}
+              onChange={(event) =>
+                setSample({
+                  ...sample,
+                  transcript_summary: event.target.value,
+                })
+              }
+            />
+          </label>
           <div className="mt-4 grid gap-2 rounded-md bg-slate-950 p-4 text-xs leading-5 text-slate-100">
             <p>Title: {sample.title}</p>
             <p>Duration: {sample.duration}s</p>
             <p>Shots: {sample.shot_count}</p>
             <p>Source: {sampleUpload?.public_url || 'default fixture input'}</p>
             <p>Analysis: {sampleUpload ? 'scene detect' : 'default sample preset'}</p>
+            <p>Transcript: {transcriptUpload?.filename || 'manual / default summary'}</p>
           </div>
         </div>
 
