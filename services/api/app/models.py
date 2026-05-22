@@ -91,11 +91,17 @@ class TransferMappingOverride(BaseModel):
     asset_strategy: str = ""
 
 
+class MaterialRequestTask(BaseModel):
+    slot_id: str
+    status: Literal["待补拍", "已拍", "已交付"] = "待补拍"
+
+
 class TransferPlan(BaseModel):
     title: str
     target_topic: str
     mappings: list[TransferMapping]
     gaps: list[MaterialGap] = Field(default_factory=list)
+    material_request_sheet: list[MaterialRequestTask] = Field(default_factory=list)
 
 
 class CompositionTrack(BaseModel):
@@ -153,6 +159,7 @@ class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput
     mapping_overrides: list[TransferMappingOverride] = Field(default_factory=list)
+    material_request_sheet: list[MaterialRequestTask] = Field(default_factory=list)
 
 
 class StructurePreviewResponse(BaseModel):

@@ -90,3 +90,42 @@ def test_create_demo_run_applies_mapping_overrides_to_preview_and_tracks():
     assert "3 秒先讲新店开业限时福利" in caption_texts
     assert "现在到店领取开业双杯券" in caption_texts
     assert "结尾用优惠卡片 + 到店字幕补足 CTA" in card_texts
+
+
+def test_create_demo_run_returns_material_request_sheet_from_request():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "咖啡拉花爆款样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先用拉花特写吸引注意，再展示手作过程。",
+            },
+            "content": {
+                "topic": "精品咖啡店开业短视频",
+                "product_name": "巷口手作咖啡",
+                "selling_points": ["手作拉花", "新店开业优惠"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "material_request_sheet": [
+                {
+                    "slot_id": "selling_points",
+                    "status": "已拍",
+                },
+                {
+                    "slot_id": "cta",
+                    "status": "已交付",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["preview"]["transfer_plan"]["material_request_sheet"] == [
+        {"slot_id": "selling_points", "status": "已拍"},
+        {"slot_id": "cta", "status": "已交付"},
+    ]

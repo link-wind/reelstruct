@@ -27,6 +27,7 @@ def create_demo_run(request: StructurePreviewRequest) -> DemoRunResponse:
         request.sample,
         request.content,
         mapping_overrides=request.mapping_overrides,
+        material_request_sheet=request.material_request_sheet,
     )
     trace.append(
         RunTraceEvent(

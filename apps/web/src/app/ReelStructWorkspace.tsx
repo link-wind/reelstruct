@@ -22,6 +22,13 @@ type MaterialGap = {
   pickup_checklist: string[]
 }
 
+type MaterialTaskStatus = '待补拍' | '已拍' | '已交付'
+
+type MaterialRequestTask = {
+  slot_id: string
+  status: MaterialTaskStatus
+}
+
 type TransferMapping = {
   slot_id: string
   source_label: string
@@ -64,6 +71,7 @@ type StructurePreviewResponse = {
     target_topic: string
     mappings: TransferMapping[]
     gaps: MaterialGap[]
+    material_request_sheet: MaterialRequestTask[]
   }
   composition: {
     width: number
@@ -142,8 +150,6 @@ type SlotDraft = {
   sample_evidence: string
   asset_strategy: string
 }
-
-type MaterialTaskStatus = '待补拍' | '已拍' | '已交付'
 
 const workflow = [
   {
@@ -224,9 +230,10 @@ export default function ReelStructWorkspace() {
 
   useEffect(() => {
     const nextGapIds = (preview?.transfer_plan.gaps || []).map((gap) => gap.slot_id)
+    const nextRequestSheet = preview?.transfer_plan.material_request_sheet || []
     setSelectedGapIds(nextGapIds)
-    setRequestSheetIds([])
-    setRequestSheetStatus({})
+    setRequestSheetIds(nextRequestSheet.map((item) => item.slot_id))
+    setRequestSheetStatus(Object.fromEntries(nextRequestSheet.map((item) => [item.slot_id, item.status])))
     setRequestSheetFeedback('')
   }, [preview])
 
@@ -308,6 +315,7 @@ export default function ReelStructWorkspace() {
           sample,
           content,
           mapping_overrides,
+          material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
         },
       })
       setRun(runResponse)
@@ -1093,6 +1101,16 @@ function buildMaterialRequestSheetText(
       ]
     }),
   ].join('\n').trim()
+}
+
+function buildMaterialRequestSheetPayload(
+  requestSheetIds: string[],
+  statusLookup: Record<string, MaterialTaskStatus>,
+): MaterialRequestTask[] {
+  return requestSheetIds.map((slotId) => ({
+    slot_id: slotId,
+    status: statusLookup[slotId] ?? '待补拍',
+  }))
 }
 
 const fallbackSlots: StructureSlot[] = [

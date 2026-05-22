@@ -64,6 +64,13 @@ try {
     throw new Error("missing clipboard status content");
   }
 
+  await page.getByRole("button", { name: "应用改稿并重生成" }).click();
+  await page.waitForTimeout(3000);
+  const rerunBodyText = await page.locator("body").innerText();
+  if (!rerunBodyText.includes("当前状态：已拍")) {
+    throw new Error("missing persisted request sheet status after rerun");
+  }
+
   await page.getByRole("button", { name: "清空需求单" }).click();
   const bodyTextAfterClear = await page.locator("body").innerText();
   if (!bodyTextAfterClear.includes("先从补拍建议里勾选缺口，再点“加入需求单”。")) {

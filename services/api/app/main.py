@@ -46,6 +46,7 @@ def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePre
         request.sample,
         request.content,
         mapping_overrides=request.mapping_overrides,
+        material_request_sheet=request.material_request_sheet,
     )
 
 

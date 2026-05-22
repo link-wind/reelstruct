@@ -4,6 +4,7 @@ from app.models import (
     CompositionSpec,
     CompositionTrack,
     MaterialGap,
+    MaterialRequestTask,
     NewContentInput,
     SampleAnalysisBeat,
     SampleAnalysisMetric,
@@ -22,11 +23,18 @@ def build_structure_preview(
     sample: SampleVideoInput,
     content: NewContentInput,
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
+    material_request_sheet: Optional[list[MaterialRequestTask]] = None,
 ) -> StructurePreviewResponse:
     template = extract_template_structure(sample)
     template = apply_slot_level_overrides(template, mapping_overrides)
     gaps = detect_material_gaps(template, content)
-    transfer_plan = build_transfer_plan(template, content, gaps, mapping_overrides=mapping_overrides)
+    transfer_plan = build_transfer_plan(
+        template,
+        content,
+        gaps,
+        mapping_overrides=mapping_overrides,
+        material_request_sheet=material_request_sheet,
+    )
     composition = build_composition_spec(template, transfer_plan)
     return StructurePreviewResponse(
         template=template,
@@ -121,6 +129,7 @@ def build_transfer_plan(
     content: NewContentInput,
     gaps: list[MaterialGap],
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
+    material_request_sheet: Optional[list[MaterialRequestTask]] = None,
 ) -> TransferPlan:
     gap_lookup = {gap.slot_id: gap for gap in gaps}
     override_lookup = {item.slot_id: item for item in (mapping_overrides or [])}
@@ -149,7 +158,25 @@ def build_transfer_plan(
         target_topic=content.topic,
         mappings=mappings,
         gaps=gaps,
+        material_request_sheet=build_material_request_sheet(template, gaps, material_request_sheet),
     )
+
+
+def build_material_request_sheet(
+    template: TemplateStructure,
+    gaps: list[MaterialGap],
+    request_sheet: Optional[list[MaterialRequestTask]] = None,
+) -> list[MaterialRequestTask]:
+    if not request_sheet:
+        return []
+
+    request_lookup = {item.slot_id: item for item in request_sheet}
+    gap_slots = {gap.slot_id for gap in gaps}
+    return [
+        MaterialRequestTask(slot_id=slot.id, status=request_lookup[slot.id].status)
+        for slot in template.script_pattern
+        if slot.id in gap_slots and slot.id in request_lookup
+    ]
 
 
 def build_composition_spec(
