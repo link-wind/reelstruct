@@ -108,6 +108,8 @@ type DemoRunResponse = {
   created_at: string
   status: 'succeeded' | 'failed'
   pinned: boolean
+  template_id: string
+  template_title: string
   note: string
   preview: StructurePreviewResponse
   prepared_assets: RenderClipPreview[]
@@ -120,12 +122,23 @@ type RunRecordSummary = {
   created_at: string
   status: 'succeeded' | 'failed'
   pinned: boolean
+  template_id: string
+  template_title: string
   title: string
   target_topic: string
   gap_count: number
   material_request_count: number
   video_url: string
   note: string
+}
+
+type StructureTemplateRecord = {
+  template_id: string
+  created_at: string
+  source_run_id: string
+  template: {
+    title: string
+  }
 }
 
 type StructureTemplateSummary = {
@@ -234,6 +247,8 @@ export default function ReelStructWorkspace() {
   const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
   const [templates, setTemplates] = useState<StructureTemplateSummary[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [templateNameDraft, setTemplateNameDraft] = useState('')
+  const [runTemplateFilter, setRunTemplateFilter] = useState('')
   const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
   const [runSearchKeyword, setRunSearchKeyword] = useState('')
   const [runNoteDraft, setRunNoteDraft] = useState('')
@@ -286,11 +301,25 @@ export default function ReelStructWorkspace() {
 
   useEffect(() => {
     void fetchRecentRuns()
-  }, [runStatusFilter, runSearchKeyword])
+  }, [runStatusFilter, runSearchKeyword, runTemplateFilter])
 
   useEffect(() => {
     void fetchTemplates()
   }, [])
+
+  useEffect(() => {
+    if (selectedTemplate) {
+      setTemplateNameDraft(selectedTemplate.title)
+      return
+    }
+    if (run?.template_title) {
+      setTemplateNameDraft(run.template_title)
+      return
+    }
+    if (preview?.template.title) {
+      setTemplateNameDraft(preview.template.title)
+    }
+  }, [selectedTemplate, run?.template_title, preview?.template.title])
 
   const uploadSample = async (file: File | null) => {
     if (!file) return
@@ -385,6 +414,9 @@ export default function ReelStructWorkspace() {
       const params = new URLSearchParams()
       if (runStatusFilter !== 'all') {
         params.set('status', runStatusFilter)
+      }
+      if (runTemplateFilter) {
+        params.set('template_id', runTemplateFilter)
       }
       if (runSearchKeyword.trim()) {
         params.set('q', runSearchKeyword.trim())
@@ -507,6 +539,7 @@ export default function ReelStructWorkspace() {
       }
       const payload = (await response.json()) as DemoRunResponse
       setRun(payload)
+      setSelectedTemplateId(payload.template_id || '')
       setPreview(payload.preview)
       setSlotDrafts(buildSlotDrafts(payload.preview))
       setVideoUrl(payload.rendered_video.video_url ? `${payload.rendered_video.video_url}?t=${Date.now()}` : '')
@@ -587,16 +620,43 @@ export default function ReelStructWorkspace() {
     try {
       const response = await fetch(`/api/templates/from-run/${run.run_id}`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: templateNameDraft }),
       })
       if (!response.ok) {
         throw new Error(`保存模板失败：${response.status}`)
       }
-      const payload = (await response.json()) as StructureTemplateSummary
+      const payload = (await response.json()) as StructureTemplateRecord
       setSelectedTemplateId(payload.template_id)
+      setTemplateNameDraft(payload.template.title)
       await fetchTemplates()
       setStatus('已保存模板')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '保存模板失败')
+    }
+  }
+
+  const deleteTemplate = async (templateId: string) => {
+    try {
+      const response = await fetch(`/api/templates/${templateId}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        throw new Error(`删除模板失败：${response.status}`)
+      }
+      if (selectedTemplateId === templateId) {
+        setSelectedTemplateId('')
+      }
+      if (runTemplateFilter === templateId) {
+        setRunTemplateFilter('')
+      }
+      await fetchTemplates()
+      await fetchRecentRuns()
+      setStatus('模板已删除')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '删除模板失败')
     }
   }
 
@@ -971,10 +1031,20 @@ export default function ReelStructWorkspace() {
             <p>Gaps: {preview?.transfer_plan.gaps.length ?? 0}</p>
             <p>Video: {videoUrl ? videoUrl.split('?')[0] : '--'}</p>
             <p>Pinned: {run?.pinned ? '已置顶' : '未置顶'}</p>
-            <p>Template: {selectedTemplate?.title || '默认样例结构'}</p>
+            <p>Template: {run?.template_title || selectedTemplate?.title || '默认样例结构'}</p>
           </div>
 
           <div className="mt-3 grid gap-2">
+            <label className="grid gap-2 text-xs font-medium text-slate-700">
+              模板名称
+              <input
+                aria-label="模板名称"
+                className="rounded-md border border-line px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={templateNameDraft}
+                onChange={(event) => setTemplateNameDraft(event.target.value)}
+                placeholder="给当前结构起个模板名"
+              />
+            </label>
             <label className="grid gap-2 text-xs font-medium text-slate-700">
               run 备注
               <textarea
@@ -1090,6 +1160,22 @@ export default function ReelStructWorkspace() {
                 </button>
               </div>
             </div>
+            <label className="mt-4 grid gap-2 text-xs font-medium text-slate-700">
+              按模板筛选
+              <select
+                aria-label="按模板筛选"
+                className="rounded-md border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-signal"
+                value={runTemplateFilter}
+                onChange={(event) => setRunTemplateFilter(event.target.value)}
+              >
+                <option value="">全部模板</option>
+                {templates.map((item) => (
+                  <option key={item.template_id} value={item.template_id}>
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
             {templates.length ? (
               <div className="mt-4 grid gap-3">
                 {templates.slice(0, 5).map((item) => (
@@ -1099,17 +1185,26 @@ export default function ReelStructWorkspace() {
                         <strong className="text-sm">{item.title}</strong>
                         <p className="mt-1 text-xs text-slate-500">{item.template_id}</p>
                       </div>
-                      <button
-                        className={
-                          item.template_id === selectedTemplateId
-                            ? 'rounded-md bg-ink px-3 py-2 text-xs font-medium text-white'
-                            : 'rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700'
-                        }
-                        onClick={() => setSelectedTemplateId(item.template_id)}
-                        type="button"
-                      >
-                        {item.template_id === selectedTemplateId ? '当前使用' : '使用这个模板'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          className={
+                            item.template_id === selectedTemplateId
+                              ? 'rounded-md bg-ink px-3 py-2 text-xs font-medium text-white'
+                              : 'rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700'
+                          }
+                          onClick={() => setSelectedTemplateId(item.template_id)}
+                          type="button"
+                        >
+                          {item.template_id === selectedTemplateId ? '当前使用' : '使用这个模板'}
+                        </button>
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-coral"
+                          onClick={() => void deleteTemplate(item.template_id)}
+                          type="button"
+                        >
+                          删除模板
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                       <span className="rounded-full bg-white px-2.5 py-1">槽位 {item.slot_count}</span>
@@ -1165,6 +1260,9 @@ export default function ReelStructWorkspace() {
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                       {item.pinned ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">已置顶</span> : null}
+                      {item.template_title ? (
+                        <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">模板 {item.template_title}</span>
+                      ) : null}
                       <span className="rounded-full bg-white px-2.5 py-1">缺口 {item.gap_count}</span>
                       <span className="rounded-full bg-white px-2.5 py-1">需求单 {item.material_request_count}</span>
                       <span className="rounded-full bg-white px-2.5 py-1">{item.status}</span>

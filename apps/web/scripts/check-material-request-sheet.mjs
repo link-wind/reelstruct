@@ -108,6 +108,12 @@ try {
   if (!bodyTextAfterPin.includes("已置顶")) {
     throw new Error("missing pinned run state");
   }
+  const firstCurrentRunMatch = bodyTextAfterPin.match(/Run:\s*(demo-[a-z0-9]{8})/);
+  if (!firstCurrentRunMatch) {
+    throw new Error("missing current run id");
+  }
+  const templateTitle = `${firstCurrentRunMatch[1]} 结构模板`;
+  await page.getByLabel("模板名称").fill(templateTitle);
   await page.getByRole("button", { name: "保存为模板" }).click();
   await page.waitForTimeout(500);
   const bodyTextAfterTemplateSave = await page.locator("body").innerText();
@@ -117,9 +123,43 @@ try {
   if (!bodyTextAfterTemplateSave.includes("当前使用模板")) {
     throw new Error("missing active template state");
   }
-  if (!bodyTextAfterTemplateSave.includes("咖啡拉花爆款样例 的可迁移结构")) {
+  if (!bodyTextAfterTemplateSave.includes(templateTitle)) {
     throw new Error("missing saved template title");
   }
+
+  const [firstJsonDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "导出 run JSON" }).click(),
+  ]);
+  const firstJsonDownloadPath = await firstJsonDownload.path();
+  const firstJsonText = firstJsonDownloadPath ? await fs.readFile(firstJsonDownloadPath, "utf-8") : "";
+  if (!firstJsonText.includes("\"material_request_sheet\"")) {
+    throw new Error("missing material request sheet in exported run json");
+  }
+  if (!firstJsonText.includes("\"status\": \"已拍\"")) {
+    throw new Error("missing persisted status in exported run json");
+  }
+  if (!firstJsonText.includes("\"note\": \"优先补拍卖点特写\"")) {
+    throw new Error("missing persisted run note in exported json");
+  }
+  if (!firstJsonText.includes("\"pinned\": true")) {
+    throw new Error("missing persisted pinned state in exported json");
+  }
+
+  await page.getByRole("button", { name: "生成迁移 demo" }).click();
+  await page.waitForTimeout(3000);
+  const bodyTextAfterTemplateRun = await page.locator("body").innerText();
+  if (!bodyTextAfterTemplateRun.includes(`Template: ${templateTitle}`)) {
+    throw new Error("missing applied template state on current run");
+  }
+  await page.getByLabel("按模板筛选").selectOption({ label: templateTitle });
+  await page.waitForTimeout(500);
+  const bodyTextAfterTemplateFilter = await page.locator("body").innerText();
+  if (!bodyTextAfterTemplateFilter.includes(`模板 ${templateTitle}`)) {
+    throw new Error("missing template-filtered run badge");
+  }
+  await page.getByLabel("按模板筛选").selectOption("");
+  await page.waitForTimeout(300);
 
   const [jsonDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -127,20 +167,11 @@ try {
   ]);
   const jsonDownloadPath = await jsonDownload.path();
   const jsonText = jsonDownloadPath ? await fs.readFile(jsonDownloadPath, "utf-8") : "";
-  if (!jsonText.includes("\"material_request_sheet\"")) {
-    throw new Error("missing material request sheet in exported run json");
-  }
-  if (!jsonText.includes("\"status\": \"已拍\"")) {
-    throw new Error("missing persisted status in exported run json");
-  }
-  if (!jsonText.includes("\"note\": \"优先补拍卖点特写\"")) {
-    throw new Error("missing persisted run note in exported json");
-  }
-  if (!jsonText.includes("\"pinned\": true")) {
-    throw new Error("missing persisted pinned state in exported json");
+  if (!jsonText.includes(`\"template_title\": \"${templateTitle}\"`)) {
+    throw new Error("missing persisted template title in exported json");
   }
 
-  const currentRunMatch = bodyTextAfterPin.match(/Run:\s*(demo-[a-z0-9]{8})/);
+  const currentRunMatch = bodyTextAfterTemplateRun.match(/Run:\s*(demo-[a-z0-9]{8})/);
   if (!currentRunMatch) {
     throw new Error("missing current run id");
   }
@@ -166,9 +197,28 @@ try {
   }
   await recentRunCards.nth(deleteIndex).getByRole("button", { name: "删除记录" }).click();
   await page.waitForTimeout(500);
-  const bodyTextAfterDelete = await page.locator("body").innerText();
-  if (bodyTextAfterDelete.includes(deletedRunId)) {
+  let deletedRunStillVisible = false;
+  const remainingRunCount = await recentRunCards.count();
+  for (let index = 0; index < remainingRunCount; index += 1) {
+    const cardText = await recentRunCards.nth(index).innerText();
+    if (cardText.includes(deletedRunId)) {
+      deletedRunStillVisible = true;
+      break;
+    }
+  }
+  if (deletedRunStillVisible) {
     throw new Error("deleted run card still visible in recent runs list");
+  }
+
+  const templateCard = page
+    .locator("article")
+    .filter({ hasText: templateTitle })
+    .filter({ has: page.getByRole("button", { name: "删除模板" }) })
+    .first();
+  await templateCard.getByRole("button", { name: "删除模板" }).click();
+  await page.waitForTimeout(500);
+  if ((await templateCard.count()) !== 0) {
+    throw new Error("deleted template card still visible");
   }
 
   await page.getByRole("button", { name: "清空需求单" }).click();

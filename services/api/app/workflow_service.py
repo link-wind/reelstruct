@@ -21,6 +21,8 @@ def create_demo_run(
     request: StructurePreviewRequest,
     runs_dir: Optional[Path] = None,
     template_override: Optional[TemplateStructure] = None,
+    template_id: str = "",
+    template_title: str = "",
 ) -> DemoRunResponse:
     run_id = f"demo-{uuid4().hex[:8]}"
     created_at = datetime.now(timezone.utc).isoformat()
@@ -81,6 +83,8 @@ def create_demo_run(
         run_id=run_id,
         created_at=created_at,
         status="succeeded",
+        template_id=template_id,
+        template_title=template_title,
         preview=preview,
         prepared_assets=[
             RenderClipPreview(

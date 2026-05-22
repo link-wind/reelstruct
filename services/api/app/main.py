@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.fixture_asset_service import build_render_clips_from_composition
 from app.models import (
+    CreateTemplateFromRunRequest,
     CompositionSpec,
     DemoRunResponse,
     PrepareDemoAssetsResponse,
@@ -32,6 +33,7 @@ from app.sample_service import extract_transcript_upload, save_sample_upload
 from app.structure_service import build_structure_preview
 from app.template_record_service import (
     create_structure_template_from_run,
+    delete_structure_template_record,
     list_structure_template_records,
     load_structure_template_record,
 )
@@ -80,6 +82,8 @@ def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
         request,
         runs_dir=RUNS_DIR,
         template_override=template_record.template if template_record else None,
+        template_id=template_record.template_id if template_record else "",
+        template_title=template_record.template.title if template_record else "",
     )
 
 
@@ -116,16 +120,16 @@ def patch_run_pin(run_id: str, request: RunPinUpdateRequest) -> DemoRunResponse:
 
 
 @app.get("/api/runs", response_model=list[RunRecordSummary])
-def list_run_records(q: str = "", status: str = "") -> list[RunRecordSummary]:
-    return list_demo_run_records(RUNS_DIR, q=q, status=status)
+def list_run_records(q: str = "", status: str = "", template_id: str = "") -> list[RunRecordSummary]:
+    return list_demo_run_records(RUNS_DIR, q=q, status=status, template_id=template_id)
 
 
 @app.post("/api/templates/from-run/{run_id}", response_model=StructureTemplateRecord)
-def save_template_from_run(run_id: str) -> StructureTemplateRecord:
+def save_template_from_run(run_id: str, request: CreateTemplateFromRunRequest) -> StructureTemplateRecord:
     run = load_demo_run_record(run_id, RUNS_DIR)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    return create_structure_template_from_run(run, TEMPLATES_DIR)
+    return create_structure_template_from_run(run, TEMPLATES_DIR, title=request.title)
 
 
 @app.get("/api/templates", response_model=list[StructureTemplateSummary])
@@ -136,6 +140,14 @@ def list_templates() -> list[StructureTemplateSummary]:
 @app.get("/api/templates/{template_id}", response_model=StructureTemplateRecord)
 def get_template(template_id: str) -> StructureTemplateRecord:
     return _get_template_record_or_404(template_id)
+
+
+@app.delete("/api/templates/{template_id}", status_code=204)
+def delete_template(template_id: str) -> Response:
+    deleted = delete_structure_template_record(template_id, TEMPLATES_DIR)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return Response(status_code=204)
 
 
 @app.post("/api/samples/upload", response_model=SampleUploadResponse)

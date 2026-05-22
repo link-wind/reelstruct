@@ -407,12 +407,16 @@ def test_save_run_as_template_and_apply_it_to_new_demo_run():
     first_run = first_run_response.json()
     source_run_id = first_run["run_id"]
 
-    save_template_response = client.post(f"/api/templates/from-run/{source_run_id}")
+    save_template_response = client.post(
+        f"/api/templates/from-run/{source_run_id}",
+        json={"title": "咖啡开业通用模板"},
+    )
     list_templates_response = client.get("/api/templates")
 
     assert save_template_response.status_code == 200
     saved_template = save_template_response.json()
     assert saved_template["source_run_id"] == source_run_id
+    assert saved_template["template"]["title"] == "咖啡开业通用模板"
     assert any(item["template_id"] == saved_template["template_id"] for item in list_templates_response.json())
 
     second_run_response = client.post(
@@ -439,6 +443,122 @@ def test_save_run_as_template_and_apply_it_to_new_demo_run():
     first_slot_lookup = {slot["id"]: slot for slot in first_run["preview"]["template"]["script_pattern"]}
     second_slot_lookup = {slot["id"]: slot for slot in second_run["preview"]["template"]["script_pattern"]}
 
-    assert second_run["preview"]["template"]["title"] == first_run["preview"]["template"]["title"]
+    assert second_run["template_id"] == saved_template["template_id"]
+    assert second_run["template_title"] == "咖啡开业通用模板"
+    assert second_run["preview"]["template"]["title"] == "咖啡开业通用模板"
     assert second_slot_lookup["hook"]["duration"] == first_slot_lookup["hook"]["duration"]
     assert second_slot_lookup["cta"]["start"] == first_slot_lookup["cta"]["start"]
+
+
+def test_delete_template_removes_it_from_library():
+    client = TestClient(app)
+
+    run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "待删除模板样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "待删除模板短视频",
+                "product_name": "待删除模板门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert run_response.status_code == 200
+    run_id = run_response.json()["run_id"]
+
+    save_response = client.post(f"/api/templates/from-run/{run_id}", json={"title": "待删除模板"})
+    assert save_response.status_code == 200
+    template_id = save_response.json()["template_id"]
+
+    delete_response = client.delete(f"/api/templates/{template_id}")
+    get_response = client.get(f"/api/templates/{template_id}")
+    list_response = client.get("/api/templates")
+
+    assert delete_response.status_code == 204
+    assert get_response.status_code == 404
+    assert template_id not in [item["template_id"] for item in list_response.json()]
+
+
+def test_list_saved_demo_runs_supports_template_filter():
+    client = TestClient(app)
+
+    base_run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "模板来源样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "模板来源短视频",
+                "product_name": "模板来源门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+    normal_run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "普通样例",
+                "duration": 18,
+                "shot_count": 5,
+                "transcript_summary": "先给结果，再给过程。",
+            },
+            "content": {
+                "topic": "普通短视频",
+                "product_name": "普通门店",
+                "selling_points": ["卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert base_run_response.status_code == 200
+    assert normal_run_response.status_code == 200
+
+    save_template_response = client.post(
+        f"/api/templates/from-run/{base_run_response.json()['run_id']}",
+        json={"title": "筛选模板"},
+    )
+    assert save_template_response.status_code == 200
+    template_id = save_template_response.json()["template_id"]
+
+    templated_run_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "套模板样例",
+                "duration": 30,
+                "shot_count": 9,
+                "transcript_summary": "这个样例不该决定最终结构。",
+            },
+            "content": {
+                "topic": "模板筛选短视频",
+                "product_name": "模板筛选门店",
+                "selling_points": ["卖点三"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "template_id": template_id,
+        },
+    )
+
+    assert templated_run_response.status_code == 200
+    templated_run = templated_run_response.json()
+    filtered_list_response = client.get("/api/runs", params={"template_id": template_id})
+
+    assert filtered_list_response.status_code == 200
+    runs = filtered_list_response.json()
+    assert any(item["run_id"] == templated_run["run_id"] for item in runs)
+    assert all(item["template_id"] == template_id for item in runs)

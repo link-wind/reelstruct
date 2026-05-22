@@ -13,12 +13,21 @@ def save_structure_template_record(record: StructureTemplateRecord, templates_di
     return target_path
 
 
-def create_structure_template_from_run(run: DemoRunResponse, templates_dir: Path) -> StructureTemplateRecord:
+def create_structure_template_from_run(
+    run: DemoRunResponse,
+    templates_dir: Path,
+    title: str = "",
+) -> StructureTemplateRecord:
+    template = run.preview.template.model_copy(
+        update={
+            "title": title.strip() or run.preview.template.title,
+        }
+    )
     record = StructureTemplateRecord(
         template_id=f"tpl-{uuid4().hex[:8]}",
         created_at=datetime.now(timezone.utc).isoformat(),
         source_run_id=run.run_id,
-        template=run.preview.template,
+        template=template,
     )
     save_structure_template_record(record, templates_dir)
     return record
@@ -29,6 +38,14 @@ def load_structure_template_record(template_id: str, templates_dir: Path) -> Opt
     if not target_path.exists():
         return None
     return StructureTemplateRecord.model_validate_json(target_path.read_text(encoding="utf-8"))
+
+
+def delete_structure_template_record(template_id: str, templates_dir: Path) -> bool:
+    target_path = templates_dir / f"{template_id}.json"
+    if not target_path.exists():
+        return False
+    target_path.unlink()
+    return True
 
 
 def list_structure_template_records(templates_dir: Path, limit: int = 20) -> list[StructureTemplateSummary]:

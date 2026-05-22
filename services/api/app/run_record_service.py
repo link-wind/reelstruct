@@ -48,9 +48,10 @@ def update_demo_run_pinned(run_id: str, pinned: bool, runs_dir: Path) -> Optiona
 
 def list_demo_run_records(
     runs_dir: Path,
-    limit: int = 20,
+    limit: int = 100,
     q: str = "",
     status: str = "",
+    template_id: str = "",
 ) -> list[RunRecordSummary]:
     summaries: list[tuple[tuple[str, int], RunRecordSummary]] = []
 
@@ -67,6 +68,8 @@ def list_demo_run_records(
                     created_at=created_at,
                     status=payload.get("status", "failed"),
                     pinned=payload.get("pinned", False),
+                    template_id=payload.get("template_id", ""),
+                    template_title=payload.get("template_title", ""),
                     title=transfer_plan.get("title", "未命名迁移任务"),
                     target_topic=transfer_plan.get("target_topic", ""),
                     gap_count=len(transfer_plan.get("gaps", [])),
@@ -81,6 +84,8 @@ def list_demo_run_records(
     items.sort(key=lambda item: not item.pinned)
     if status in {"succeeded", "failed"}:
         items = [item for item in items if item.status == status]
+    if template_id.strip():
+        items = [item for item in items if item.template_id == template_id.strip()]
     if q.strip():
         needle = q.strip().lower()
         items = [
@@ -90,6 +95,7 @@ def list_demo_run_records(
             or needle in item.title.lower()
             or needle in item.target_topic.lower()
             or needle in item.note.lower()
+            or needle in item.template_title.lower()
         ]
     return items[:limit]
 

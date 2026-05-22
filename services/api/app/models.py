@@ -151,6 +151,8 @@ class RunRecordSummary(BaseModel):
     created_at: str = ""
     status: Literal["succeeded", "failed"]
     pinned: bool = False
+    template_id: str = ""
+    template_title: str = ""
     title: str
     target_topic: str = ""
     gap_count: int = 0
@@ -164,6 +166,8 @@ class DemoRunResponse(BaseModel):
     created_at: str = ""
     status: Literal["succeeded", "failed"]
     pinned: bool = False
+    template_id: str = ""
+    template_title: str = ""
     note: str = ""
     preview: "StructurePreviewResponse"
     prepared_assets: list[RenderClipPreview] = Field(default_factory=list)
@@ -193,6 +197,10 @@ class StructureTemplateRecord(BaseModel):
     created_at: str = ""
     source_run_id: str = ""
     template: TemplateStructure
+
+
+class CreateTemplateFromRunRequest(BaseModel):
+    title: str = ""
 
 
 class StructurePreviewRequest(BaseModel):
