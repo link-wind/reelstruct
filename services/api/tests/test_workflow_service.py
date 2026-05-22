@@ -225,3 +225,36 @@ def test_list_saved_demo_runs_returns_latest_first():
     assert run_ids.index(second_run["run_id"]) < run_ids.index(first_run["run_id"])
     assert summary_lookup[second_run["run_id"]]["title"] == "第二家门店 结构迁移方案"
     assert "created_at" in summary_lookup[second_run["run_id"]]
+
+
+def test_delete_saved_demo_run_removes_snapshot():
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "待删除样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "待删除短视频",
+                "product_name": "待删除门店",
+                "selling_points": ["卖点一"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert create_response.status_code == 200
+    run_id = create_response.json()["run_id"]
+
+    delete_response = client.delete(f"/api/runs/{run_id}")
+    get_response = client.get(f"/api/runs/{run_id}")
+    list_response = client.get("/api/runs")
+
+    assert delete_response.status_code == 204
+    assert get_response.status_code == 404
+    assert run_id not in [item["run_id"] for item in list_response.json()]

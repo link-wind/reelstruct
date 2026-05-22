@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
 
 from app.fixture_asset_service import build_render_clips_from_composition
@@ -17,7 +17,7 @@ from app.models import (
     StructurePreviewResponse,
 )
 from app.render_service import render_demo_video
-from app.run_record_service import list_demo_run_records, load_demo_run_record
+from app.run_record_service import delete_demo_run_record, list_demo_run_records, load_demo_run_record
 from app.sample_service import extract_transcript_upload, save_sample_upload
 from app.structure_service import build_structure_preview
 from app.workflow_service import create_demo_run
@@ -65,6 +65,14 @@ def get_run_record(run_id: str) -> DemoRunResponse:
     if record is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return record
+
+
+@app.delete("/api/runs/{run_id}", status_code=204)
+def delete_run_record(run_id: str) -> Response:
+    deleted = delete_demo_run_record(run_id, RUNS_DIR)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return Response(status_code=204)
 
 
 @app.get("/api/runs", response_model=list[RunRecordSummary])

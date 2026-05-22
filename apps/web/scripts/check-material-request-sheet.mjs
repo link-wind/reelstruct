@@ -76,6 +76,12 @@ try {
   if (!rerunBodyText.includes("巷口手作咖啡 结构迁移方案")) {
     throw new Error("missing recent run summary content");
   }
+  await page.getByRole("button", { name: "只看成功" }).click();
+  const filteredBodyText = await page.locator("body").innerText();
+  if (!filteredBodyText.includes("只看成功")) {
+    throw new Error("missing success filter control");
+  }
+  await page.getByRole("button", { name: "全部记录" }).click();
 
   const [jsonDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -88,6 +94,14 @@ try {
   }
   if (!jsonText.includes("\"status\": \"已拍\"")) {
     throw new Error("missing persisted status in exported run json");
+  }
+
+  const firstRunId = await page.locator('text=/demo-[a-z0-9]{8}/').first().innerText();
+  const firstRunCard = page.locator("article").filter({ hasText: firstRunId }).first();
+  await page.getByRole("button", { name: "删除记录" }).first().click();
+  await page.waitForTimeout(500);
+  if ((await firstRunCard.count()) !== 0) {
+    throw new Error("deleted run card still visible in recent runs list");
   }
 
   await page.getByRole("button", { name: "清空需求单" }).click();

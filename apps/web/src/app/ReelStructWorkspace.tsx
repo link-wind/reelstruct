@@ -124,6 +124,8 @@ type RunRecordSummary = {
   video_url: string
 }
 
+type RunStatusFilter = 'all' | 'succeeded'
+
 type SampleVideoInput = {
   title: string
   duration: number
@@ -217,6 +219,7 @@ export default function ReelStructWorkspace() {
   const [requestSheetStatus, setRequestSheetStatus] = useState<Record<string, MaterialTaskStatus>>({})
   const [requestSheetFeedback, setRequestSheetFeedback] = useState('')
   const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
+  const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all')
   const [videoUrl, setVideoUrl] = useState('')
   const [status, setStatus] = useState('等待生成')
   const [error, setError] = useState('')
@@ -240,6 +243,13 @@ export default function ReelStructWorkspace() {
   const requestSheetText = useMemo(() => {
     return buildMaterialRequestSheetText(requestSheetGaps, requestSheetStatus)
   }, [requestSheetGaps, requestSheetStatus])
+
+  const visibleRecentRuns = useMemo(() => {
+    if (runStatusFilter === 'succeeded') {
+      return recentRuns.filter((item) => item.status === 'succeeded')
+    }
+    return recentRuns
+  }, [recentRuns, runStatusFilter])
 
   useEffect(() => {
     const nextGapIds = (preview?.transfer_plan.gaps || []).map((gap) => gap.slot_id)
@@ -456,6 +466,25 @@ export default function ReelStructWorkspace() {
       setStatus(`已载入 ${payload.run_id}`)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '读取 run 失败')
+    }
+  }
+
+  const deleteRunRecord = async (runId: string) => {
+    try {
+      const response = await fetch(`/api/runs/${runId}`, { method: 'DELETE' })
+      if (!response.ok) {
+        throw new Error(`删除记录失败：${response.status}`)
+      }
+      setRecentRuns((current) => current.filter((item) => item.run_id !== runId))
+      if (run?.run_id === runId) {
+        setRun(null)
+        setPreview(null)
+        setSlotDrafts({})
+        setVideoUrl('')
+        setStatus('已删除当前记录')
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '删除记录失败')
     }
   }
 
@@ -847,6 +876,28 @@ export default function ReelStructWorkspace() {
             >
               刷新记录
             </button>
+            <button
+              className={
+                runStatusFilter === 'all'
+                  ? 'rounded-md bg-ink px-3 py-2 text-xs font-medium text-white'
+                  : 'rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700'
+              }
+              onClick={() => setRunStatusFilter('all')}
+              type="button"
+            >
+              全部记录
+            </button>
+            <button
+              className={
+                runStatusFilter === 'succeeded'
+                  ? 'rounded-md bg-ink px-3 py-2 text-xs font-medium text-white'
+                  : 'rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700'
+              }
+              onClick={() => setRunStatusFilter('succeeded')}
+              type="button"
+            >
+              只看成功
+            </button>
           </div>
 
           <div className="mt-5 border-t border-line pt-5">
@@ -856,25 +907,34 @@ export default function ReelStructWorkspace() {
                 <h3 className="mt-1 text-lg font-semibold">最近生成结果</h3>
               </div>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                {recentRuns.length} 条
+                {visibleRecentRuns.length} 条
               </span>
             </div>
-            {recentRuns.length ? (
+            {visibleRecentRuns.length ? (
               <div className="mt-4 grid gap-3">
-                {recentRuns.slice(0, 5).map((item) => (
+                {visibleRecentRuns.slice(0, 5).map((item) => (
                   <article key={item.run_id} className="rounded-md border border-line bg-slate-50 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <strong className="text-sm">{item.title}</strong>
                         <p className="mt-1 text-xs text-slate-500">{item.run_id}</p>
                       </div>
-                      <button
-                        className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
-                        onClick={() => void loadRunRecord(item.run_id)}
-                        type="button"
-                      >
-                        载入记录
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
+                          onClick={() => void loadRunRecord(item.run_id)}
+                          type="button"
+                        >
+                          载入记录
+                        </button>
+                        <button
+                          className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-coral"
+                          onClick={() => void deleteRunRecord(item.run_id)}
+                          type="button"
+                        >
+                          删除记录
+                        </button>
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
                       <span className="rounded-full bg-white px-2.5 py-1">缺口 {item.gap_count}</span>

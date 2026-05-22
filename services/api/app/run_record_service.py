@@ -20,6 +20,14 @@ def load_demo_run_record(run_id: str, runs_dir: Path) -> Optional[DemoRunRespons
     return DemoRunResponse.model_validate_json(target_path.read_text(encoding="utf-8"))
 
 
+def delete_demo_run_record(run_id: str, runs_dir: Path) -> bool:
+    target_path = runs_dir / f"{run_id}.json"
+    if not target_path.exists():
+        return False
+    target_path.unlink()
+    return True
+
+
 def list_demo_run_records(runs_dir: Path, limit: int = 20) -> list[RunRecordSummary]:
     summaries: list[tuple[tuple[str, int], RunRecordSummary]] = []
 
