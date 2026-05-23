@@ -30,6 +30,8 @@ class RenderClip:
     caption: str
     start_time: float
     duration: float
+    source_type: str
+    source_label: str
 
 
 def search_fixture_assets(
@@ -86,6 +88,8 @@ def copy_fixture_asset(
         caption="",
         start_time=0,
         duration=candidate.duration,
+        source_type="fixture",
+        source_label=f"fixture 匹配：{candidate.title}",
     )
 
 
@@ -112,6 +116,8 @@ def build_render_clips_from_composition(
                     caption=caption_lookup.get(track.slot_id, ""),
                     start_time=track.start,
                     duration=track.duration,
+                    source_type="uploaded",
+                    source_label="用户上传素材",
                 )
             )
             continue
@@ -133,6 +139,8 @@ def build_render_clips_from_composition(
                 caption=caption_lookup.get(track.slot_id, ""),
                 start_time=track.start,
                 duration=track.duration,
+                source_type=copied.source_type,
+                source_label=copied.source_label,
             )
         )
     return clips

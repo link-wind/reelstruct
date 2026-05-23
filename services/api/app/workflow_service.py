@@ -100,6 +100,8 @@ def create_demo_run(
                 caption=clip.caption,
                 start_time=clip.start_time,
                 duration=clip.duration,
+                source_type=clip.source_type,
+                source_label=clip.source_label,
             )
             for clip in clips
         ],

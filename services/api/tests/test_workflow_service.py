@@ -29,6 +29,8 @@ def test_create_demo_run_returns_preview_assets_video_and_trace():
     assert body["status"] == "succeeded"
     assert body["preview"]["transfer_plan"]["title"] == "巷口手作咖啡 结构迁移方案"
     assert len(body["prepared_assets"]) >= 1
+    assert body["prepared_assets"][0]["source_type"] in {"fixture", "uploaded"}
+    assert body["prepared_assets"][0]["source_label"]
     assert body["rendered_video"]["video_url"].startswith("/output/")
     assert any(gap["suggested_asset_type"] for gap in body["preview"]["transfer_plan"]["gaps"])
     assert any(gap["suggested_shots"] for gap in body["preview"]["transfer_plan"]["gaps"])

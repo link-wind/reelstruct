@@ -110,6 +110,8 @@ type RenderClipPreview = {
   caption: string
   start_time: number
   duration: number
+  source_type: string
+  source_label: string
 }
 
 type RunTraceEvent = {
@@ -1537,6 +1539,33 @@ export default function ReelStructWorkspace() {
             <p>Template: {run?.template_title || selectedTemplate?.title || '默认样例结构'}</p>
             <p>Tags: {(run?.template_tags.length ? run.template_tags : selectedTemplate?.tags || []).join(' / ') || '--'}</p>
           </div>
+
+          {run?.prepared_assets.length ? (
+            <div className="mt-4 rounded-md border border-line bg-slate-50 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-signal">素材来源</p>
+                  <h3 className="mt-1 text-lg font-semibold">本次重组素材说明</h3>
+                </div>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                  {run.prepared_assets.length} 段
+                </span>
+              </div>
+              <div className="mt-4 grid gap-2">
+                {run.prepared_assets.map((asset) => (
+                  <article key={`${asset.scene_id}-${asset.public_url}`} className="rounded-md border border-line bg-white p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="text-sm">{labelForSlot(asset.scene_id)}</strong>
+                      <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
+                        {asset.source_type === 'uploaded' ? '用户上传' : 'fixture 匹配'}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs leading-5 text-slate-600">{asset.source_label || asset.public_url}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {runBatch ? (
             <div className="mt-4 rounded-md border border-line bg-slate-50 p-4">

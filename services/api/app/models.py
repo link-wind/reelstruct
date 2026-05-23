@@ -139,6 +139,8 @@ class RenderClipPreview(BaseModel):
     caption: str = ""
     start_time: float = 0
     duration: float = 0
+    source_type: str = ""
+    source_label: str = ""
 
 
 class PrepareDemoAssetsResponse(BaseModel):

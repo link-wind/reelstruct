@@ -78,6 +78,8 @@ def test_build_render_clips_from_composition_uses_video_tracks(tmp_path):
     assert len(clips) == 1
     assert clips[0].scene_id == "selling_points"
     assert clips[0].caption == "突出手作咖啡"
+    assert clips[0].source_type == "fixture"
+    assert clips[0].source_label == "fixture 匹配：咖啡拉花特写"
     assert Path(clips[0].local_path).exists()
 
 
@@ -113,3 +115,5 @@ def test_build_render_clips_from_composition_prefers_uploaded_slot_asset(tmp_pat
     assert clips[0].local_path == str(uploaded_path)
     assert clips[0].public_url == "/materials/selling-points.mp4"
     assert clips[0].caption == "突出手作咖啡"
+    assert clips[0].source_type == "uploaded"
+    assert clips[0].source_label == "用户上传素材"

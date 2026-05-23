@@ -123,6 +123,12 @@ try {
   if (!rerunBodyText.includes("已补齐素材")) {
     throw new Error("missing delivered material state after rerun");
   }
+  if (!rerunBodyText.includes("素材来源") || !rerunBodyText.includes("用户上传")) {
+    throw new Error("missing uploaded material source explanation after rerun");
+  }
+  if (!rerunBodyText.includes("fixture 匹配")) {
+    throw new Error("missing fixture material source explanation after rerun");
+  }
   if ((await page.locator('text=/demo-[a-z0-9]{8}/').count()) < 2) {
     throw new Error("missing recent run summary content");
   }
