@@ -6,6 +6,7 @@ from app.models import (
     MaterialGap,
     MaterialRequestTask,
     NewContentInput,
+    PackagingPlan,
     SampleAnalysisBeat,
     SampleAnalysisMetric,
     SampleAnalysisSummary,
@@ -206,6 +207,7 @@ def build_transfer_plan(
             else _target_message_for_slot(slot.id, content, variant)
         )
         asset_strategy = build_asset_strategy(slot, gap_lookup.get(slot.id), override)
+        packaging = _packaging_plan_for_slot(slot, content, target_message, variant)
         mappings.append(
             TransferMapping(
                 slot_id=slot.id,
@@ -216,7 +218,8 @@ def build_transfer_plan(
                 target_adaptation=_target_adaptation_for_slot(slot, content, target_message),
                 reasoning=_transfer_reasoning_for_slot(slot),
                 asset_requirement=slot.required_asset,
-                packaging_plan=slot.packaging_intent,
+                packaging_plan=_packaging_plan_summary(packaging, slot.packaging_intent),
+                packaging=packaging,
                 fallback_strategy=gap_lookup.get(slot.id).fill_strategy if gap_lookup.get(slot.id) else asset_strategy,
             )
         )
@@ -299,13 +302,19 @@ def build_composition_spec(
                 slot_id=slot.id,
             )
         )
-        if "卡片" in mapping.asset_strategy:
+        card_texts = _dedupe(
+            [
+                mapping.packaging.card_text,
+                mapping.asset_strategy if "卡片" in mapping.asset_strategy else "",
+            ]
+        )
+        for card_text in card_texts:
             tracks.append(
                 CompositionTrack(
                     type="card",
                     start=slot.start + 0.8,
                     duration=max(slot.duration - 1, 1),
-                    text=mapping.asset_strategy,
+                    text=card_text,
                     slot_id=slot.id,
                 )
             )
@@ -479,6 +488,72 @@ def _variant_packaging_notes(variant: str) -> list[str]:
         "fast_rhythm": ["快切节奏", "短字幕", "高密度镜头"],
     }
     return notes.get(variant, [])
+
+
+def _packaging_plan_for_slot(
+    slot: StructureSlot,
+    content: NewContentInput,
+    target_message: str,
+    variant: str,
+) -> PackagingPlan:
+    product = content.product_name or content.topic
+    first_point = content.selling_points[0] if content.selling_points else "核心卖点"
+    second_point = content.selling_points[1] if len(content.selling_points) > 1 else first_point
+    density = {
+        "high_click": "高密度",
+        "high_conversion": "标准偏强",
+        "fast_rhythm": "短字幕高频",
+    }.get(variant, "标准")
+
+    if slot.id == "hook":
+        title_card = f"标题卡片：{product} 为什么值得停下来"
+        return PackagingPlan(
+            caption_density=density,
+            title_card=title_card,
+            card_text=title_card,
+            emphasis_words=_dedupe([product, "停下来", "前 2 秒" if variant == "high_click" else "现在需要"]),
+            transition_hint="用反差开场或结果镜头直接切入主信息。",
+            cover_hint=f"封面候选：{product} + 最大利益点，保留强标题。",
+        )
+    if slot.id == "selling_points":
+        card_text = f"卖点卡片：{first_point} / {second_point}"
+        return PackagingPlan(
+            caption_density=density,
+            title_card="",
+            card_text=card_text,
+            emphasis_words=_dedupe([first_point, second_point, product]),
+            transition_hint="一镜一卖点，卡片跟随镜头切换。",
+            cover_hint=f"封面候选：{first_point} 的可视化结果。",
+        )
+    if slot.id == "usage":
+        card_text = f"过程标签：{product} 真实使用"
+        return PackagingPlan(
+            caption_density="说明字幕" if variant != "fast_rhythm" else "短字幕高频",
+            title_card="",
+            card_text=card_text,
+            emphasis_words=_dedupe([product, "真实场景"]),
+            transition_hint="从卖点卡片转入动作过程，字幕解释画面含义。",
+            cover_hint=f"封面候选：{product} 的使用前后或关键动作。",
+        )
+    card_text = f"行动号召：记住 {product}"
+    return PackagingPlan(
+        caption_density="低密度停留" if variant != "fast_rhythm" else "短 CTA",
+        title_card=f"结尾标题卡片：{product}",
+        card_text=card_text,
+        emphasis_words=_dedupe([product, "立即行动" if variant == "high_conversion" else "下一步"]),
+        transition_hint="最后一镜停留，行动信息和字幕同时出现。",
+        cover_hint=f"封面候选：{product} + 行动理由。",
+    )
+
+
+def _packaging_plan_summary(packaging: PackagingPlan, fallback: str) -> str:
+    parts = [
+        packaging.title_card,
+        packaging.card_text,
+        f"字幕密度：{packaging.caption_density}" if packaging.caption_density else "",
+    ]
+    summary = "；".join(item for item in parts if item)
+    return summary or fallback
 
 
 def _dedupe(items: list[str]) -> list[str]:

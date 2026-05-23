@@ -102,6 +102,15 @@ class MaterialGap(BaseModel):
     pickup_checklist: list[str] = Field(default_factory=list)
 
 
+class PackagingPlan(BaseModel):
+    caption_density: str = "标准"
+    title_card: str = ""
+    card_text: str = ""
+    emphasis_words: list[str] = Field(default_factory=list)
+    transition_hint: str = ""
+    cover_hint: str = ""
+
+
 class TransferMapping(BaseModel):
     slot_id: str
     source_label: str
@@ -112,6 +121,7 @@ class TransferMapping(BaseModel):
     reasoning: str = ""
     asset_requirement: str = ""
     packaging_plan: str = ""
+    packaging: PackagingPlan = Field(default_factory=PackagingPlan)
     fallback_strategy: str = ""
 
 

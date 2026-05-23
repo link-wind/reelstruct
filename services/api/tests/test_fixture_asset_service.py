@@ -83,6 +83,26 @@ def test_build_render_clips_from_composition_uses_video_tracks(tmp_path):
     assert Path(clips[0].local_path).exists()
 
 
+def test_build_render_clips_from_composition_merges_caption_and_card_text(tmp_path):
+    write_fixture_library(tmp_path)
+    composition = CompositionSpec(
+        duration=6,
+        tracks=[
+            CompositionTrack(type="video", start=0, duration=3, source="咖啡 商品特写镜头", slot_id="selling_points"),
+            CompositionTrack(type="caption", start=0.5, duration=2, text="突出手作咖啡", slot_id="selling_points"),
+            CompositionTrack(type="card", start=0.8, duration=2, text="卖点卡片：手作拉花", slot_id="selling_points"),
+        ],
+    )
+
+    clips = build_render_clips_from_composition(
+        composition,
+        fixture_root=tmp_path,
+        output_dir=tmp_path / "downloads",
+    )
+
+    assert clips[0].caption == "卖点卡片：手作拉花\n突出手作咖啡"
+
+
 def test_build_render_clips_from_composition_prefers_uploaded_slot_asset(tmp_path):
     write_fixture_library(tmp_path)
     uploaded_path = tmp_path / "uploads" / "selling-points.mp4"

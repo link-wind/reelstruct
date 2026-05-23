@@ -64,6 +64,9 @@ try {
   if (!bodyTextAfterBatchRun.includes("可迁移规则") || !bodyTextAfterBatchRun.includes("迁移理由")) {
     throw new Error("missing transfer reasoning details");
   }
+  if (!bodyTextAfterBatchRun.includes("画面包装方案") || !bodyTextAfterBatchRun.includes("标题卡片") || !bodyTextAfterBatchRun.includes("字幕密度")) {
+    throw new Error("missing structured packaging plan details");
+  }
 
   await page.getByRole("button", { name: "全选缺口" }).click();
   await page.getByRole("button", { name: "加入需求单" }).click();
@@ -344,7 +347,7 @@ try {
     throw new Error("missing exported run package path");
   }
   const zipList = spawnSync("unzip", ["-l", zipDownloadPath], { encoding: "utf-8" });
-  if (zipList.status !== 0 || !zipList.stdout.includes("run.json") || !zipList.stdout.includes("material-sources.txt") || !zipList.stdout.includes("material-analysis.txt") || !zipList.stdout.includes("final-demo.mp4")) {
+  if (zipList.status !== 0 || !zipList.stdout.includes("run.json") || !zipList.stdout.includes("material-sources.txt") || !zipList.stdout.includes("material-analysis.txt") || !zipList.stdout.includes("packaging-plan.txt") || !zipList.stdout.includes("final-demo.mp4")) {
     throw new Error("missing expected files in exported run package");
   }
   const sourceText = spawnSync("unzip", ["-p", zipDownloadPath, "material-sources.txt"], { encoding: "utf-8" }).stdout;
@@ -354,6 +357,10 @@ try {
   const materialAnalysisText = spawnSync("unzip", ["-p", zipDownloadPath, "material-analysis.txt"], { encoding: "utf-8" }).stdout;
   if (!materialAnalysisText.includes("真实素材适配说明") || !materialAnalysisText.includes("推荐槽位：Hook")) {
     throw new Error("missing material analysis explanation in exported run package");
+  }
+  const packagingPlanText = spawnSync("unzip", ["-p", zipDownloadPath, "packaging-plan.txt"], { encoding: "utf-8" }).stdout;
+  if (!packagingPlanText.includes("画面包装方案") || !packagingPlanText.includes("标题卡片") || !packagingPlanText.includes("字幕密度")) {
+    throw new Error("missing packaging plan explanation in exported run package");
   }
 
   const currentRunMatch = bodyTextAfterRollbackRun.match(/Run:\s*(demo-[a-z0-9]{8})/);

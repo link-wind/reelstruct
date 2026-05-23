@@ -59,6 +59,15 @@ type UserSlotAsset = {
   analysis: MaterialFitAnalysis
 }
 
+type PackagingPlan = {
+  caption_density: string
+  title_card: string
+  card_text: string
+  emphasis_words: string[]
+  transition_hint: string
+  cover_hint: string
+}
+
 type TransferMapping = {
   slot_id: string
   source_label: string
@@ -69,6 +78,7 @@ type TransferMapping = {
   reasoning: string
   asset_requirement: string
   packaging_plan: string
+  packaging: PackagingPlan
   fallback_strategy: string
 }
 
@@ -1503,7 +1513,11 @@ export default function ReelStructWorkspace() {
                       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">素材/包装支撑</p>
                       <div className="mt-3 grid gap-2 text-sm leading-6 text-slate-700">
                         <p><strong className="text-ink">素材要求：</strong>{mapping?.asset_requirement || slot.required_asset}</p>
-                        <p><strong className="text-ink">包装计划：</strong>{mapping?.packaging_plan || slot.packaging_intent || '字幕和卡片辅助表达'}</p>
+                        <p><strong className="text-ink">画面包装方案：</strong>{mapping?.packaging?.card_text || mapping?.packaging_plan || slot.packaging_intent || '字幕和卡片辅助表达'}</p>
+                        <p><strong className="text-ink">标题卡片：</strong>{mapping?.packaging?.title_card || '按画面内容决定'}</p>
+                        <p><strong className="text-ink">字幕密度：</strong>{mapping?.packaging?.caption_density || '标准'}</p>
+                        <p><strong className="text-ink">强调词：</strong>{mapping?.packaging?.emphasis_words?.join(' / ') || '跟随主信息'}</p>
+                        <p><strong className="text-ink">封面提示：</strong>{mapping?.packaging?.cover_hint || '从主视觉中选择'}</p>
                         <p><strong className="text-ink">缺口策略：</strong>{mapping?.fallback_strategy || draft.asset_strategy}</p>
                       </div>
                     </div>

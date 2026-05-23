@@ -13,6 +13,7 @@ def build_run_export_zip(run: DemoRunResponse) -> bytes:
         archive.writestr("material-request-sheet.txt", build_material_request_sheet_text(run))
         archive.writestr("material-sources.txt", build_material_sources_text(run))
         archive.writestr("material-analysis.txt", build_material_analysis_text(run))
+        archive.writestr("packaging-plan.txt", build_packaging_plan_text(run))
 
         video_path = Path(run.rendered_video.local_path)
         if video_path.is_file():
@@ -53,6 +54,30 @@ def build_material_sources_text(run: DemoRunResponse) -> str:
                 f"来源类型：{asset.source_type or 'unknown'}",
                 f"来源说明：{asset.source_label or asset.public_url}",
                 f"文件：{asset.public_url}",
+                "",
+            ]
+        )
+    return "\n".join(lines).strip()
+
+
+def build_packaging_plan_text(run: DemoRunResponse) -> str:
+    lines = ["画面包装方案", ""]
+    mappings = run.preview.transfer_plan.mappings
+    if not mappings:
+        lines.append("当前 run 没有包装方案。")
+        return "\n".join(lines).strip()
+
+    for index, mapping in enumerate(mappings, start=1):
+        packaging = mapping.packaging
+        lines.extend(
+            [
+                f"{index}. {mapping.source_label}（{mapping.slot_id}）",
+                f"标题卡片：{packaging.title_card or '不单独使用标题卡片'}",
+                f"包装卡片：{packaging.card_text or '不单独使用包装卡片'}",
+                f"字幕密度：{packaging.caption_density}",
+                f"强调词：{' / '.join(packaging.emphasis_words) if packaging.emphasis_words else '无'}",
+                f"转场提示：{packaging.transition_hint or '跟随原结构节奏'}",
+                f"封面提示：{packaging.cover_hint or '从主视觉中选择'}",
                 "",
             ]
         )

@@ -86,11 +86,16 @@ def test_export_demo_run_package_contains_run_video_request_sheet_and_sources():
         assert "material-request-sheet.txt" in names
         assert "material-sources.txt" in names
         assert "final-demo.mp4" in names
+        assert "packaging-plan.txt" in names
         assert run_id in archive.read("run.json").decode("utf-8")
         assert "素材需求单" in archive.read("material-request-sheet.txt").decode("utf-8")
         assert "当前状态：待补拍" in archive.read("material-request-sheet.txt").decode("utf-8")
         assert "素材来源说明" in archive.read("material-sources.txt").decode("utf-8")
         assert "fixture 匹配" in archive.read("material-sources.txt").decode("utf-8")
+        packaging_text = archive.read("packaging-plan.txt").decode("utf-8")
+        assert "画面包装方案" in packaging_text
+        assert "标题卡片" in packaging_text
+        assert "字幕密度" in packaging_text
 
 
 def test_export_demo_run_package_contains_uploaded_material_analysis():

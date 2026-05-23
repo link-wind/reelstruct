@@ -102,11 +102,7 @@ def build_render_clips_from_composition(
     fixture_root: Optional[Path] = None,
     output_dir: Optional[Path] = None,
 ) -> list[RenderClip]:
-    caption_lookup = {
-        track.slot_id: track.text
-        for track in composition.tracks
-        if track.type == "caption" and track.text.strip()
-    }
+    caption_lookup = _caption_lookup_with_packaging(composition)
     clips: list[RenderClip] = []
     for index, track in enumerate([item for item in composition.tracks if item.type == "video"], start=1):
         uploaded_path = Path(track.asset_local_path) if track.asset_local_path else None
@@ -151,6 +147,18 @@ def build_render_clips_from_composition(
     return clips
 
 
+def _caption_lookup_with_packaging(composition: CompositionSpec) -> dict[str, str]:
+    lookup: dict[str, list[str]] = {}
+    for track_type in ("card", "caption"):
+        for track in composition.tracks:
+            if track.type == track_type and track.text.strip():
+                lookup.setdefault(track.slot_id, []).append(track.text.strip())
+    return {
+        slot_id: "\n".join(_dedupe_texts(texts))
+        for slot_id, texts in lookup.items()
+    }
+
+
 def _load_fixture_library(root: Path) -> list[dict]:
     library_path = root / "fixtures" / "videos.json"
     with library_path.open("r", encoding="utf-8") as handle:
@@ -169,6 +177,14 @@ def _normalize_keywords(keywords: list[str]) -> list[str]:
             if stripped:
                 normalized.append(stripped)
     return normalized
+
+
+def _dedupe_texts(items: list[str]) -> list[str]:
+    deduped: list[str] = []
+    for item in items:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped
 
 
 def _matched_keywords(entry: dict, keywords: list[str]) -> list[str]:

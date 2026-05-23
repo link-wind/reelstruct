@@ -214,6 +214,43 @@ def test_build_structure_preview_explains_mapping_reasoning_and_support():
     assert "卡片" in selling_mapping.fallback_strategy
 
 
+def test_build_structure_preview_returns_structured_packaging_tracks():
+    response = build_structure_preview(
+        sample=SampleVideoInput(
+            title="咖啡拉花样例",
+            duration=20,
+            shot_count=6,
+            transcript_summary="先用拉花特写吸引注意。再展示手作过程和门店氛围。最后引导到店打卡。",
+        ),
+        content=NewContentInput(
+            topic="精品咖啡店开业短视频",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        variant="high_click",
+    )
+
+    mapping_lookup = {item.slot_id: item for item in response.transfer_plan.mappings}
+    hook_packaging = mapping_lookup["hook"].packaging
+    selling_packaging = mapping_lookup["selling_points"].packaging
+    cta_packaging = mapping_lookup["cta"].packaging
+
+    assert hook_packaging.title_card == "标题卡片：巷口手作咖啡 为什么值得停下来"
+    assert hook_packaging.caption_density == "高密度"
+    assert "巷口手作咖啡" in hook_packaging.emphasis_words
+    assert "反差" in hook_packaging.transition_hint
+    assert "封面候选" in hook_packaging.cover_hint
+    assert selling_packaging.card_text.startswith("卖点卡片：")
+    assert cta_packaging.card_text.startswith("行动号召：")
+
+    card_tracks = [track for track in response.composition.tracks if track.type == "card"]
+    card_texts = [track.text for track in card_tracks]
+    assert hook_packaging.card_text in card_texts
+    assert selling_packaging.card_text in card_texts
+    assert cta_packaging.card_text in card_texts
+
+
 def test_build_structure_preview_applies_slot_level_overrides():
     response = build_structure_preview(
         sample=SampleVideoInput(
