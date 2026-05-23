@@ -14,6 +14,7 @@ def build_run_export_zip(run: DemoRunResponse) -> bytes:
         archive.writestr("material-sources.txt", build_material_sources_text(run))
         archive.writestr("material-analysis.txt", build_material_analysis_text(run))
         archive.writestr("packaging-plan.txt", build_packaging_plan_text(run))
+        archive.writestr("ai-structure-analysis.txt", build_ai_structure_analysis_text(run))
 
         video_path = Path(run.rendered_video.local_path)
         if video_path.is_file():
@@ -115,6 +116,42 @@ def build_material_analysis_text(run: DemoRunResponse) -> str:
     return "\n".join(lines).strip()
 
 
+def build_ai_structure_analysis_text(run: DemoRunResponse) -> str:
+    template = run.preview.template
+    summary = template.analysis_summary
+    lines = [
+        "视频结构拆解证据",
+        "",
+        f"结构来源：{_analysis_source_text(summary.source)}",
+        f"整体置信度：{summary.confidence:.2f}",
+        f"拆解标题：{summary.headline}",
+        f"节奏摘要：{template.rhythm_summary}",
+    ]
+    if summary.warnings:
+        lines.extend(["", "Warnings:", *[f"- {warning}" for warning in summary.warnings]])
+
+    lines.extend(["", "结构槽位：", ""])
+    for index, slot in enumerate(template.script_pattern, start=1):
+        lines.extend(
+            [
+                f"{index}. {slot.label}（{slot.id}）",
+                f"时间范围：{slot.start}-{round(slot.start + slot.duration, 1)}s",
+                f"证据镜头：{_shot_indices_text(slot.evidence_shot_indices)}",
+                f"槽位置信度：{slot.confidence:.2f}",
+                f"结构目的：{slot.purpose}",
+                f"拆解方法：{slot.method or '未提供'}",
+                f"样例证据：{slot.sample_evidence}",
+                f"节奏：{slot.rhythm or '未提供'}",
+                f"包装：{slot.packaging_intent or '未提供'}",
+                f"可迁移规则：{slot.transferable_rule or '保留结构目的，替换具体内容。'}",
+                f"不可复制：{slot.non_transferable or '不复制样例具体表达。'}",
+                "",
+            ]
+        )
+
+    return "\n".join(lines).strip()
+
+
 def _material_task_text(task: MaterialRequestTask, gap: Optional[MaterialGap]) -> str:
     if gap is None:
         return "\n".join(
@@ -132,3 +169,17 @@ def _material_task_text(task: MaterialRequestTask, gap: Optional[MaterialGap]) -
             f"检查清单：{'；'.join(gap.pickup_checklist)}",
         ]
     )
+
+
+def _analysis_source_text(source: str) -> str:
+    if source == "ai":
+        return "AI 视频结构拆解"
+    if source == "fallback":
+        return "基础兜底拆解"
+    return "基础规则拆解"
+
+
+def _shot_indices_text(indices: list[int]) -> str:
+    if not indices:
+        return "未绑定具体镜头"
+    return " / ".join(str(item) for item in indices)

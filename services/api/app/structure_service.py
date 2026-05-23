@@ -25,11 +25,13 @@ def build_structure_preview(
     sample: SampleVideoInput,
     content: NewContentInput,
     template_override: Optional[TemplateStructure] = None,
+    ai_template: Optional[TemplateStructure] = None,
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
     material_request_sheet: Optional[list[MaterialRequestTask]] = None,
     variant: str = "standard",
 ) -> StructurePreviewResponse:
-    template = template_override.model_copy(deep=True) if template_override is not None else extract_template_structure(sample)
+    selected_template = template_override or ai_template
+    template = selected_template.model_copy(deep=True) if selected_template is not None else extract_template_structure(sample)
     template = apply_variant_to_template(template, variant)
     template = apply_slot_level_overrides(template, mapping_overrides)
     effective_content = apply_delivered_material_tasks_to_content(template, content, material_request_sheet)

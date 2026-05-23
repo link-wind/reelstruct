@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
@@ -21,6 +22,7 @@ from app.models import (
     SampleUploadResponse,
     StructureTemplateRecord,
     StructureTemplateSummary,
+    TemplateStructure,
     StructureVariantSummary,
     StructureVariantsResponse,
     TranscriptUploadResponse,
@@ -53,6 +55,7 @@ from app.template_record_service import (
     update_structure_template_record,
 )
 from app.workflow_service import create_demo_run
+from app.video_understanding.pipeline import build_ai_or_fallback_structure_template
 
 
 app = FastAPI(title="ReelStruct API")
@@ -87,10 +90,12 @@ def health_check() -> dict[str, str]:
 @app.post("/api/structure/preview", response_model=StructurePreviewResponse)
 def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePreviewResponse:
     template_record = _get_template_record_or_404(request.template_id) if request.template_id else None
+    ai_template = _build_ai_template_for_request(request, template_record.template if template_record else None)
     return build_structure_preview(
         request.sample,
         request.content,
         template_override=template_record.template if template_record else None,
+        ai_template=ai_template,
         mapping_overrides=request.mapping_overrides,
         material_request_sheet=request.material_request_sheet,
         variant=request.variant,
@@ -100,12 +105,14 @@ def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePre
 @app.post("/api/structure/variants", response_model=StructureVariantsResponse)
 def compare_structure_variants(request: StructurePreviewRequest) -> StructureVariantsResponse:
     template_record = _get_template_record_or_404(request.template_id) if request.template_id else None
+    ai_template = _build_ai_template_for_request(request, template_record.template if template_record else None)
     variants = []
     for variant in ("standard", "high_click", "high_conversion", "fast_rhythm"):
         preview = build_structure_preview(
             request.sample,
             request.content,
             template_override=template_record.template if template_record else None,
+            ai_template=ai_template,
             mapping_overrides=request.mapping_overrides,
             material_request_sheet=request.material_request_sheet,
             variant=variant,
@@ -128,10 +135,12 @@ def compare_structure_variants(request: StructurePreviewRequest) -> StructureVar
 @app.post("/api/runs/demo", response_model=DemoRunResponse)
 def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
     template_record = _get_template_record_or_404(request.template_id) if request.template_id else None
+    ai_template = _build_ai_template_for_request(request, template_record.template if template_record else None)
     return create_demo_run(
         request,
         runs_dir=RUNS_DIR,
         template_override=template_record.template if template_record else None,
+        ai_template=ai_template,
         template_id=template_record.template_id if template_record else "",
         template_title=template_record.template.title if template_record else "",
         template_tags=template_record.tags if template_record else [],
@@ -141,6 +150,7 @@ def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
 @app.post("/api/runs/demo-variants", response_model=DemoVariantRunsResponse)
 def run_demo_variant_workflows(request: StructurePreviewRequest) -> DemoVariantRunsResponse:
     template_record = _get_template_record_or_404(request.template_id) if request.template_id else None
+    ai_template = _build_ai_template_for_request(request, template_record.template if template_record else None)
     batch_id = f"batch-{uuid4().hex[:8]}"
     runs = []
     for variant in ("standard", "high_click", "high_conversion", "fast_rhythm"):
@@ -151,12 +161,27 @@ def run_demo_variant_workflows(request: StructurePreviewRequest) -> DemoVariantR
                 runs_dir=RUNS_DIR,
                 batch_id=batch_id,
                 template_override=template_record.template if template_record else None,
+                ai_template=ai_template,
                 template_id=template_record.template_id if template_record else "",
                 template_title=template_record.template.title if template_record else "",
                 template_tags=template_record.tags if template_record else [],
             )
         )
     return DemoVariantRunsResponse(runs=runs)
+
+
+def _build_ai_template_for_request(
+    request: StructurePreviewRequest,
+    template_override: Optional[TemplateStructure],
+):
+    if template_override is not None:
+        return None
+    if not request.use_ai_structure or not request.sample_local_path.strip():
+        return None
+    return build_ai_or_fallback_structure_template(
+        sample=request.sample,
+        sample_local_path=request.sample_local_path,
+    )
 
 
 @app.get("/api/runs/{run_id}", response_model=DemoRunResponse)

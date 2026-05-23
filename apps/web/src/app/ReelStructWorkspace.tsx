@@ -17,6 +17,8 @@ type StructureSlot = {
   transferable_rule: string
   non_transferable: string
   packaging_intent: string
+  evidence_shot_indices: number[]
+  confidence: number
 }
 
 type MaterialGap = {
@@ -112,6 +114,9 @@ type StructurePreviewResponse = {
         evidence: string
       }>
       packaging_signals: string[]
+      source: 'rule' | 'ai' | 'fallback'
+      confidence: number
+      warnings: string[]
     }
   }
   transfer_plan: {
@@ -435,6 +440,11 @@ export default function ReelStructWorkspace() {
     return (preview?.transfer_plan.gaps || []).filter((gap) => selectedGapIds.includes(gap.slot_id))
   }, [preview, selectedGapIds])
 
+  const analysisSummary = preview?.template.analysis_summary
+  const analysisSource = analysisSummary?.source || 'rule'
+  const analysisConfidence = analysisSummary?.confidence || 0
+  const analysisWarnings = analysisSummary?.warnings || []
+
   const requestSheetItems = useMemo(() => {
     const slotLookup = new Map((preview?.template.script_pattern || []).map((slot) => [slot.id, slot]))
     const serverTaskLookup = new Map((preview?.transfer_plan.material_request_sheet || []).map((task) => [task.slot_id, task]))
@@ -636,6 +646,8 @@ export default function ReelStructWorkspace() {
         body: {
           sample,
           content,
+          sample_local_path: sampleUpload?.local_path || '',
+          use_ai_structure: true,
           template_id: selectedTemplateId,
           variant: outputVariant,
           mapping_overrides,
@@ -668,6 +680,8 @@ export default function ReelStructWorkspace() {
         body: {
           sample,
           content,
+          sample_local_path: sampleUpload?.local_path || '',
+          use_ai_structure: true,
           template_id: selectedTemplateId,
           variant: outputVariant,
           mapping_overrides,
@@ -697,6 +711,8 @@ export default function ReelStructWorkspace() {
         body: {
           sample,
           content,
+          sample_local_path: sampleUpload?.local_path || '',
+          use_ai_structure: true,
           template_id: selectedTemplateId,
           mapping_overrides: preview ? buildMappingOverrides(preview, slotDrafts) : [],
           material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
@@ -1464,9 +1480,17 @@ export default function ReelStructWorkspace() {
                 {preview?.template.analysis_summary.headline || '样例解析结果'}
               </h2>
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
-              {preview?.template.rhythm_summary || '等待生成后展示'}
-            </span>
+            <div className="flex flex-wrap justify-end gap-2">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-600">
+                {preview?.template.rhythm_summary || '等待生成后展示'}
+              </span>
+              {preview ? (
+                <span className={`rounded-full px-3 py-1 text-sm font-semibold ${analysisSourceClass(analysisSource)}`}>
+                  结构拆解来源：{analysisSourceLabel(analysisSource)}
+                  {analysisConfidence ? ` · ${(analysisConfidence * 100).toFixed(0)}%` : ''}
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <div className="mt-5 grid gap-4 lg:grid-cols-[320px_1fr]">
@@ -1500,6 +1524,14 @@ export default function ReelStructWorkspace() {
                   ))}
                 </div>
               </div>
+
+              {analysisWarnings.length ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+                  {analysisWarnings.map((warning, index) => (
+                    <p key={`${warning}-${index}`}>{warning}</p>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1555,6 +1587,16 @@ export default function ReelStructWorkspace() {
                       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
                         需求素材：{slot.required_asset}
                       </span>
+                      {slot.evidence_shot_indices?.length ? (
+                        <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
+                          证据镜头：{slot.evidence_shot_indices.join(' / ')}
+                        </span>
+                      ) : null}
+                      {slot.confidence ? (
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                          置信度：{(slot.confidence * 100).toFixed(0)}%
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -2661,6 +2703,18 @@ function variantLabel(variant: OutputVariant): string {
   return outputVariants.find((item) => item.value === variant)?.label || '默认版'
 }
 
+function analysisSourceLabel(source: 'rule' | 'ai' | 'fallback'): string {
+  if (source === 'ai') return 'AI 视频结构拆解'
+  if (source === 'fallback') return '基础兜底拆解'
+  return '基础规则拆解'
+}
+
+function analysisSourceClass(source: 'rule' | 'ai' | 'fallback'): string {
+  if (source === 'ai') return 'bg-sky-50 text-sky-700'
+  if (source === 'fallback') return 'bg-amber-50 text-amber-800'
+  return 'bg-slate-100 text-slate-600'
+}
+
 const materialTaskStatuses: MaterialTaskStatus[] = ['待补拍', '已拍', '已交付']
 
 function buildMaterialRequestSheetEntry(item: MaterialRequestSheetItem, status: MaterialTaskStatus): string {
@@ -2734,6 +2788,8 @@ const fallbackSlots: StructureSlot[] = [
     transferable_rule: '保留先给结果再解释价值的结构',
     non_transferable: '不复制样例具体内容',
     packaging_intent: '大标题和强字幕强化停留',
+    evidence_shot_indices: [],
+    confidence: 0,
   },
   {
     id: 'selling_points',
@@ -2750,6 +2806,8 @@ const fallbackSlots: StructureSlot[] = [
     transferable_rule: '保留一镜一卖点的展开方式',
     non_transferable: '不复制样例具体卖点',
     packaging_intent: '卖点卡片和关键词高亮',
+    evidence_shot_indices: [],
+    confidence: 0,
   },
   {
     id: 'usage',
@@ -2766,6 +2824,8 @@ const fallbackSlots: StructureSlot[] = [
     transferable_rule: '保留用场景证明卖点的结构',
     non_transferable: '不复制样例具体动作和人物',
     packaging_intent: '说明字幕补足动作含义',
+    evidence_shot_indices: [],
+    confidence: 0,
   },
   {
     id: 'cta',
@@ -2782,6 +2842,8 @@ const fallbackSlots: StructureSlot[] = [
     transferable_rule: '保留明确行动词和最后记忆点',
     non_transferable: '不复制样例具体口令和优惠',
     packaging_intent: '结尾标题卡片强化 CTA',
+    evidence_shot_indices: [],
+    confidence: 0,
   },
 ]
 

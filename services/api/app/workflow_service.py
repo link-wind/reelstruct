@@ -22,17 +22,19 @@ def create_demo_run(
     runs_dir: Optional[Path] = None,
     batch_id: str = "",
     template_override: Optional[TemplateStructure] = None,
+    ai_template: Optional[TemplateStructure] = None,
     template_id: str = "",
     template_title: str = "",
     template_tags: Optional[list[str]] = None,
 ) -> DemoRunResponse:
     run_id = f"demo-{uuid4().hex[:8]}"
     created_at = datetime.now(timezone.utc).isoformat()
+    analysis_source = _analysis_source(template_override, ai_template)
     trace = [
         RunTraceEvent(
             step="analyze_structure",
             title="结构拆解",
-            message="已从样例中拆出脚本槽位、节奏摘要和包装要点。",
+            message=_analysis_trace_message(analysis_source),
             progress=25,
         )
     ]
@@ -41,6 +43,7 @@ def create_demo_run(
         request.sample,
         request.content,
         template_override=template_override,
+        ai_template=ai_template,
         mapping_overrides=request.mapping_overrides,
         material_request_sheet=request.material_request_sheet,
         variant=request.variant,
@@ -115,3 +118,21 @@ def create_demo_run(
     if runs_dir is not None:
         save_demo_run_record(response, runs_dir)
     return response
+
+
+def _analysis_source(
+    template_override: Optional[TemplateStructure],
+    ai_template: Optional[TemplateStructure],
+) -> str:
+    template = template_override or ai_template
+    if template is None:
+        return "rule"
+    return template.analysis_summary.source
+
+
+def _analysis_trace_message(source: str) -> str:
+    if source == "ai":
+        return "已完成 AI 视频结构拆解，并提取脚本槽位、节奏摘要和包装要点。"
+    if source == "fallback":
+        return "AI 结构拆解未完成，已使用基础兜底拆解继续生成。"
+    return "已从样例中拆出脚本槽位、节奏摘要和包装要点。"

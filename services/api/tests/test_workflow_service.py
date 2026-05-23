@@ -5,6 +5,8 @@ from zipfile import ZipFile
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.models import SampleAnalysisSummary, SampleVideoInput, StructureSlot, TemplateStructure
+from app.video_understanding.pipeline import build_fallback_structure_template
 
 
 def test_create_demo_run_returns_preview_assets_video_and_trace():
@@ -48,6 +50,93 @@ def test_create_demo_run_returns_preview_assets_video_and_trace():
     assert body["trace"][-1]["progress"] == 100
 
 
+def test_preview_structure_uses_ai_template_when_sample_path_is_enabled(monkeypatch, tmp_path):
+    client = TestClient(app)
+    video_path = tmp_path / "sample.mp4"
+    video_path.write_bytes(b"video")
+
+    ai_template = TemplateStructure(
+        title="AI 拆解模板",
+        script_pattern=[
+            StructureSlot(
+                id="ai_hook",
+                label="AI 钩子",
+                start=0,
+                duration=3,
+                purpose="AI 识别开场",
+                required_asset="结果吸引镜头",
+                sample_evidence="第 1 镜证据",
+                evidence_shot_indices=[1],
+                confidence=0.91,
+            )
+        ],
+        rhythm_summary="AI 节奏",
+        packaging_notes=["AI 包装"],
+        analysis_summary=SampleAnalysisSummary(headline="AI 拆解", source="ai", confidence=0.88),
+    )
+
+    def fake_ai_template(*, sample, sample_local_path):
+        assert sample.title == "样例"
+        assert sample_local_path == str(video_path)
+        return ai_template
+
+    monkeypatch.setattr("app.main.build_ai_or_fallback_structure_template", fake_ai_template)
+
+    response = client.post(
+        "/api/structure/preview",
+        json={
+            "sample": {"title": "样例", "duration": 20, "shot_count": 6},
+            "sample_local_path": str(video_path),
+            "use_ai_structure": True,
+            "content": {
+                "topic": "新品短视频",
+                "available_assets": ["结果吸引镜头"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["template"]["title"] == "AI 拆解模板"
+    assert body["template"]["analysis_summary"]["source"] == "ai"
+    assert body["template"]["script_pattern"][0]["evidence_shot_indices"] == [1]
+
+
+def test_demo_run_marks_fallback_when_ai_decomposition_fails(monkeypatch, tmp_path):
+    client = TestClient(app)
+    video_path = tmp_path / "sample.mp4"
+    video_path.write_bytes(b"video")
+
+    fallback_template = build_fallback_structure_template(
+        sample=SampleVideoInput(title="样例", duration=20, shot_count=6),
+        reason="OPENAI_API_KEY is required",
+    )
+
+    monkeypatch.setattr(
+        "app.main.build_ai_or_fallback_structure_template",
+        lambda *, sample, sample_local_path: fallback_template,
+    )
+
+    response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {"title": "样例", "duration": 20, "shot_count": 6},
+            "sample_local_path": str(video_path),
+            "use_ai_structure": True,
+            "content": {
+                "topic": "新品短视频",
+                "available_assets": ["开头吸引镜头"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["preview"]["template"]["analysis_summary"]["source"] == "fallback"
+    assert body["preview"]["template"]["analysis_summary"]["warnings"] == ["AI 结构拆解未完成：OPENAI_API_KEY is required"]
+    assert body["trace"][0]["message"] == "AI 结构拆解未完成，已使用基础兜底拆解继续生成。"
+
+
 def test_export_demo_run_package_contains_run_video_request_sheet_and_sources():
     client = TestClient(app)
 
@@ -87,6 +176,7 @@ def test_export_demo_run_package_contains_run_video_request_sheet_and_sources():
         assert "material-sources.txt" in names
         assert "final-demo.mp4" in names
         assert "packaging-plan.txt" in names
+        assert "ai-structure-analysis.txt" in names
         assert run_id in archive.read("run.json").decode("utf-8")
         assert "素材需求单" in archive.read("material-request-sheet.txt").decode("utf-8")
         assert "当前状态：待补拍" in archive.read("material-request-sheet.txt").decode("utf-8")
@@ -96,6 +186,12 @@ def test_export_demo_run_package_contains_run_video_request_sheet_and_sources():
         assert "画面包装方案" in packaging_text
         assert "标题卡片" in packaging_text
         assert "字幕密度" in packaging_text
+        ai_structure_text = archive.read("ai-structure-analysis.txt").decode("utf-8")
+        assert "视频结构拆解证据" in ai_structure_text
+        assert "结构来源：" in ai_structure_text
+        assert "证据镜头：" in ai_structure_text
+        assert "可迁移规则：" in ai_structure_text
+        assert "不可复制：" in ai_structure_text
 
 
 def test_export_demo_run_package_contains_uploaded_material_analysis():

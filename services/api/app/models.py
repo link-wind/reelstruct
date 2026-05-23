@@ -69,6 +69,8 @@ class StructureSlot(BaseModel):
     transferable_rule: str = ""
     non_transferable: str = ""
     packaging_intent: str = ""
+    evidence_shot_indices: list[int] = Field(default_factory=list)
+    confidence: float = 0
 
 
 class SampleAnalysisMetric(BaseModel):
@@ -88,6 +90,9 @@ class SampleAnalysisSummary(BaseModel):
     metrics: list[SampleAnalysisMetric] = Field(default_factory=list)
     narrative_beats: list[SampleAnalysisBeat] = Field(default_factory=list)
     packaging_signals: list[str] = Field(default_factory=list)
+    source: Literal["rule", "ai", "fallback"] = "rule"
+    confidence: float = 0
+    warnings: list[str] = Field(default_factory=list)
 
 
 class TemplateStructure(BaseModel):
@@ -308,6 +313,8 @@ class UpdateStructureTemplateRequest(BaseModel):
 class StructurePreviewRequest(BaseModel):
     sample: SampleVideoInput
     content: NewContentInput
+    sample_local_path: str = ""
+    use_ai_structure: bool = True
     template_id: str = ""
     variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"] = "standard"
     mapping_overrides: list[TransferMappingOverride] = Field(default_factory=list)
