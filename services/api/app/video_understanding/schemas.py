@@ -26,6 +26,16 @@ class KeyframeEvidence(BaseModel):
     public_url: str = Field(min_length=1)
 
 
+class ShotVisualAnalysis(BaseModel):
+    shot_index: int = Field(gt=0)
+    visual_summary: str = Field(min_length=1)
+    subject_type: str = ""
+    scene_type: str = ""
+    packaging_signals: list[str] = Field(default_factory=list)
+    confidence: float = Field(default=0, ge=0, le=1)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class RhythmMetrics(BaseModel):
     avg_shot_duration: float = 0
     cut_density: Literal["slow", "medium", "fast"] = "medium"
