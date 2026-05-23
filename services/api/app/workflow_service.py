@@ -102,6 +102,7 @@ def create_demo_run(
                 duration=clip.duration,
                 source_type=clip.source_type,
                 source_label=clip.source_label,
+                material_analysis=clip.material_analysis,
             )
             for clip in clips
         ],

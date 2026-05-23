@@ -87,7 +87,20 @@
         "start": 0,
         "duration": 3,
         "source": "Hook 开头吸引镜头 结果先行",
-        "slotId": "hook"
+        "slotId": "hook",
+        "materialAnalysis": {
+          "duration": 1,
+          "shotCount": 1,
+          "recommendedSlotId": "hook",
+          "recommendedSlotLabel": "Hook",
+          "recommendationReason": "短镜头更适合做开头吸引，当前素材约 1.0 秒、1 个镜头。",
+          "slotFitScores": {
+            "hook": 90,
+            "selling_points": 55,
+            "usage": 45,
+            "cta": 30
+          }
+        }
       },
       {
         "type": "caption",

@@ -42,11 +42,21 @@ type MaterialRequestSheetItem = {
   gap: MaterialGap | undefined
 }
 
+type MaterialFitAnalysis = {
+  duration: number
+  shot_count: number
+  recommended_slot_id: string
+  recommended_slot_label: string
+  recommendation_reason: string
+  slot_fit_scores: Record<string, number>
+}
+
 type UserSlotAsset = {
   slot_id: string
   filename: string
   local_path: string
   public_url: string
+  analysis: MaterialFitAnalysis
 }
 
 type TransferMapping = {
@@ -125,6 +135,7 @@ type RenderClipPreview = {
   duration: number
   source_type: string
   source_label: string
+  material_analysis: MaterialFitAnalysis
 }
 
 type RunTraceEvent = {
@@ -2335,11 +2346,9 @@ export default function ReelStructWorkspace() {
                 <div className="mt-4 grid gap-3">
                   {requestSheetItems.map((item) => {
                     const status = requestSheetStatus[item.task.slot_id] ?? item.task.status
+                    const uploadedAsset = uploadedAssetLookup.get(item.task.slot_id)
                     return (
                       <article key={item.task.slot_id} className="rounded-md border border-line bg-slate-50 p-4">
-                        {(() => {
-                          const uploadedAsset = uploadedAssetLookup.get(item.task.slot_id)
-                          return (
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <strong className="text-sm">{labelForSlot(item.task.slot_id)}</strong>
@@ -2368,11 +2377,31 @@ export default function ReelStructWorkspace() {
                             移出需求单
                           </button>
                         </div>
-                          )
-                        })()}
                         <p className="mt-2 text-sm leading-6 text-slate-700">
                           {item.gap?.fill_strategy || `已可使用素材：${item.slot.required_asset}`}
                         </p>
+                        {uploadedAsset?.analysis?.recommended_slot_id ? (
+                          <div className="mt-3 rounded-md border border-sky-100 bg-sky-50 p-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">素材适配分析</p>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-sky-700">
+                                推荐槽位：{uploadedAsset.analysis.recommended_slot_label}
+                              </span>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-xs text-slate-600">
+                                {uploadedAsset.analysis.duration}s / {uploadedAsset.analysis.shot_count} 镜头
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-slate-700">
+                              {uploadedAsset.analysis.recommendation_reason}
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
+                              <span>Hook {uploadedAsset.analysis.slot_fit_scores.hook ?? 0}</span>
+                              <span>卖点 {uploadedAsset.analysis.slot_fit_scores.selling_points ?? 0}</span>
+                              <span>使用过程 {uploadedAsset.analysis.slot_fit_scores.usage ?? 0}</span>
+                              <span>CTA {uploadedAsset.analysis.slot_fit_scores.cta ?? 0}</span>
+                            </div>
+                          </div>
+                        ) : null}
                         <label className="mt-3 grid gap-2 text-xs font-medium text-slate-700">
                           上传补拍素材
                           <input

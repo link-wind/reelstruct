@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.models import CompositionSpec
+from app.models import MaterialFitAnalysis
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -32,6 +33,7 @@ class RenderClip:
     duration: float
     source_type: str
     source_label: str
+    material_analysis: MaterialFitAnalysis
 
 
 def search_fixture_assets(
@@ -90,6 +92,7 @@ def copy_fixture_asset(
         duration=candidate.duration,
         source_type="fixture",
         source_label=f"fixture 匹配：{candidate.title}",
+        material_analysis=MaterialFitAnalysis(),
     )
 
 
@@ -118,6 +121,7 @@ def build_render_clips_from_composition(
                     duration=track.duration,
                     source_type="uploaded",
                     source_label="用户上传素材",
+                    material_analysis=track.material_analysis,
                 )
             )
             continue
@@ -141,6 +145,7 @@ def build_render_clips_from_composition(
                 duration=track.duration,
                 source_type=copied.source_type,
                 source_label=copied.source_label,
+                material_analysis=copied.material_analysis,
             )
         )
     return clips

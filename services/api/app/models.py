@@ -23,11 +23,21 @@ class TranscriptUploadResponse(BaseModel):
     transcript_summary: str
 
 
+class MaterialFitAnalysis(BaseModel):
+    duration: float = 0
+    shot_count: int = 0
+    recommended_slot_id: str = ""
+    recommended_slot_label: str = ""
+    recommendation_reason: str = ""
+    slot_fit_scores: dict[str, int] = Field(default_factory=dict)
+
+
 class UserSlotAsset(BaseModel):
     slot_id: str
     filename: str = ""
     local_path: str = ""
     public_url: str = ""
+    analysis: MaterialFitAnalysis = Field(default_factory=MaterialFitAnalysis)
 
 
 class NewContentInput(BaseModel):
@@ -135,6 +145,7 @@ class CompositionTrack(BaseModel):
     slot_id: str
     asset_local_path: str = ""
     asset_public_url: str = ""
+    material_analysis: MaterialFitAnalysis = Field(default_factory=MaterialFitAnalysis)
 
 
 class CompositionSpec(BaseModel):
@@ -154,6 +165,7 @@ class RenderClipPreview(BaseModel):
     duration: float = 0
     source_type: str = ""
     source_label: str = ""
+    material_analysis: MaterialFitAnalysis = Field(default_factory=MaterialFitAnalysis)
 
 
 class PrepareDemoAssetsResponse(BaseModel):

@@ -12,6 +12,7 @@ def build_run_export_zip(run: DemoRunResponse) -> bytes:
         archive.writestr("run.json", run.model_dump_json(indent=2))
         archive.writestr("material-request-sheet.txt", build_material_request_sheet_text(run))
         archive.writestr("material-sources.txt", build_material_sources_text(run))
+        archive.writestr("material-analysis.txt", build_material_analysis_text(run))
 
         video_path = Path(run.rendered_video.local_path)
         if video_path.is_file():
@@ -52,6 +53,37 @@ def build_material_sources_text(run: DemoRunResponse) -> str:
                 f"来源类型：{asset.source_type or 'unknown'}",
                 f"来源说明：{asset.source_label or asset.public_url}",
                 f"文件：{asset.public_url}",
+                "",
+            ]
+        )
+    return "\n".join(lines).strip()
+
+
+def build_material_analysis_text(run: DemoRunResponse) -> str:
+    lines = ["真实素材适配说明", ""]
+    uploaded_assets = [
+        asset for asset in run.prepared_assets
+        if asset.source_type == "uploaded" and asset.material_analysis.recommended_slot_id
+    ]
+    if not uploaded_assets:
+        lines.append("当前 run 没有带分析结果的真实上传素材。")
+        return "\n".join(lines).strip()
+
+    for index, asset in enumerate(uploaded_assets, start=1):
+        analysis = asset.material_analysis
+        lines.extend(
+            [
+                f"{index}. {asset.scene_id}",
+                f"文件：{asset.public_url}",
+                f"时长：{analysis.duration}s",
+                f"镜头数：{analysis.shot_count}",
+                f"推荐槽位：{analysis.recommended_slot_label}",
+                f"推荐理由：{analysis.recommendation_reason}",
+                "适配分："
+                f"Hook {analysis.slot_fit_scores.get('hook', 0)} / "
+                f"卖点 {analysis.slot_fit_scores.get('selling_points', 0)} / "
+                f"使用过程 {analysis.slot_fit_scores.get('usage', 0)} / "
+                f"CTA {analysis.slot_fit_scores.get('cta', 0)}",
                 "",
             ]
         )

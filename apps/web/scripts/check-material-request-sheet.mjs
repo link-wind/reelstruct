@@ -80,6 +80,9 @@ try {
   if (!bodyTextAfterMaterialUpload.includes("补拍素材已绑定") || !bodyTextAfterMaterialUpload.includes("已上传 material-")) {
     throw new Error("missing uploaded material binding state");
   }
+  if (!bodyTextAfterMaterialUpload.includes("素材适配分析") || !bodyTextAfterMaterialUpload.includes("推荐槽位：Hook")) {
+    throw new Error("missing uploaded material fit analysis");
+  }
 
   const [download] = await Promise.all([
     page.waitForEvent("download"),
@@ -341,12 +344,16 @@ try {
     throw new Error("missing exported run package path");
   }
   const zipList = spawnSync("unzip", ["-l", zipDownloadPath], { encoding: "utf-8" });
-  if (zipList.status !== 0 || !zipList.stdout.includes("run.json") || !zipList.stdout.includes("material-sources.txt") || !zipList.stdout.includes("final-demo.mp4")) {
+  if (zipList.status !== 0 || !zipList.stdout.includes("run.json") || !zipList.stdout.includes("material-sources.txt") || !zipList.stdout.includes("material-analysis.txt") || !zipList.stdout.includes("final-demo.mp4")) {
     throw new Error("missing expected files in exported run package");
   }
   const sourceText = spawnSync("unzip", ["-p", zipDownloadPath, "material-sources.txt"], { encoding: "utf-8" }).stdout;
   if (!sourceText.includes("素材来源说明") || !sourceText.includes("fixture 匹配")) {
     throw new Error("missing material source explanation in exported run package");
+  }
+  const materialAnalysisText = spawnSync("unzip", ["-p", zipDownloadPath, "material-analysis.txt"], { encoding: "utf-8" }).stdout;
+  if (!materialAnalysisText.includes("真实素材适配说明") || !materialAnalysisText.includes("推荐槽位：Hook")) {
+    throw new Error("missing material analysis explanation in exported run package");
   }
 
   const currentRunMatch = bodyTextAfterRollbackRun.match(/Run:\s*(demo-[a-z0-9]{8})/);

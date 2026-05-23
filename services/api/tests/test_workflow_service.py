@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
@@ -90,6 +91,57 @@ def test_export_demo_run_package_contains_run_video_request_sheet_and_sources():
         assert "当前状态：待补拍" in archive.read("material-request-sheet.txt").decode("utf-8")
         assert "素材来源说明" in archive.read("material-sources.txt").decode("utf-8")
         assert "fixture 匹配" in archive.read("material-sources.txt").decode("utf-8")
+
+
+def test_export_demo_run_package_contains_uploaded_material_analysis():
+    client = TestClient(app)
+    uploaded_path = Path(__file__).resolve().parents[3] / "fixtures" / "vid_001.mp4"
+
+    create_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "素材分析样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "素材分析短视频",
+                "product_name": "素材分析门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+                "uploaded_assets": [
+                    {
+                        "slot_id": "selling_points",
+                        "filename": "short-opening.mp4",
+                        "local_path": str(uploaded_path),
+                        "public_url": "/materials/short-opening.mp4",
+                        "analysis": {
+                            "duration": 1.0,
+                            "shot_count": 1,
+                            "recommended_slot_id": "hook",
+                            "recommended_slot_label": "Hook",
+                            "recommendation_reason": "短镜头更适合做开头吸引。",
+                            "slot_fit_scores": {"hook": 90, "selling_points": 55, "usage": 45, "cta": 30},
+                        },
+                    }
+                ],
+            },
+        },
+    )
+
+    assert create_response.status_code == 200
+    run_id = create_response.json()["run_id"]
+    export_response = client.get(f"/api/runs/{run_id}/export.zip")
+
+    assert export_response.status_code == 200
+    with ZipFile(BytesIO(export_response.content)) as archive:
+        assert "material-analysis.txt" in set(archive.namelist())
+        analysis_text = archive.read("material-analysis.txt").decode("utf-8")
+        assert "真实素材适配说明" in analysis_text
+        assert "推荐槽位：Hook" in analysis_text
+        assert "短镜头更适合做开头吸引" in analysis_text
 
 
 def test_create_demo_run_applies_mapping_overrides_to_preview_and_tracks():

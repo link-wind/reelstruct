@@ -266,23 +266,28 @@ def build_composition_spec(
     for slot in template.script_pattern:
         mapping = mapping_lookup[slot.id]
         uploaded_asset = uploaded_asset_lookup.get(slot.id)
+        track_payload = {
+            "type": "video",
+            "start": slot.start,
+            "duration": slot.duration,
+            "source": " ".join(
+                [
+                    slot.label,
+                    slot.required_asset,
+                    slot.purpose,
+                    mapping.target_message,
+                    transfer_plan.target_topic,
+                ]
+            ),
+            "slot_id": slot.id,
+            "asset_local_path": uploaded_asset.local_path if uploaded_asset else "",
+            "asset_public_url": uploaded_asset.public_url if uploaded_asset else "",
+        }
+        if uploaded_asset:
+            track_payload["material_analysis"] = uploaded_asset.analysis
         tracks.append(
             CompositionTrack(
-                type="video",
-                start=slot.start,
-                duration=slot.duration,
-                source=" ".join(
-                    [
-                        slot.label,
-                        slot.required_asset,
-                        slot.purpose,
-                        mapping.target_message,
-                        transfer_plan.target_topic,
-                    ]
-                ),
-                slot_id=slot.id,
-                asset_local_path=uploaded_asset.local_path if uploaded_asset else "",
-                asset_public_url=uploaded_asset.public_url if uploaded_asset else "",
+                **track_payload,
             )
         )
         tracks.append(
