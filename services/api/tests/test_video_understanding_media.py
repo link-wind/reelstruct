@@ -1,10 +1,12 @@
 from pathlib import Path
+import logging
 import subprocess
 from subprocess import CompletedProcess
 from unittest.mock import patch
 
+from app.video_understanding.keyframe_service import FFMPEG_TIMEOUT_SECONDS, extract_keyframes
 from app.video_understanding.media_probe import probe_video_metadata
-from app.video_understanding.schemas import VideoMetadata
+from app.video_understanding.schemas import VideoMetadata, VideoShot
 from app.video_understanding.shot_detector import (
     _detect_scene_cut_times,
     _parse_cut_times,
@@ -37,6 +39,173 @@ def test_detect_video_signal_returns_shots_and_rhythm_metrics():
     assert signal.rhythm_metrics.avg_shot_duration > 0
     assert signal.rhythm_metrics.cut_density in {"slow", "medium", "fast"}
     assert signal.detection_method in {"scene_detect", "uniform_fallback"}
+
+
+def test_extract_keyframes_writes_real_image_files(tmp_path):
+    fixture_path = Path(__file__).resolve().parents[3] / "fixtures" / "vid_001.mp4"
+    signal = detect_video_signal(fixture_path)
+
+    keyframes = extract_keyframes(
+        fixture_path,
+        signal.shots[:2],
+        output_dir=tmp_path / "keyframes",
+        public_prefix="/keyframes",
+    )
+
+    assert len(keyframes) == min(2, len(signal.shots))
+    for keyframe in keyframes:
+        path = Path(keyframe.local_path)
+        assert path.is_file()
+        assert path.suffix == ".jpg"
+        assert keyframe.public_url.startswith("/keyframes/")
+
+
+def test_extract_keyframes_skips_when_ffmpeg_is_missing(tmp_path):
+    shots = [VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)]
+
+    with patch("app.video_understanding.keyframe_service.subprocess.run", side_effect=FileNotFoundError):
+        keyframes = extract_keyframes(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "keyframes",
+            public_prefix="/keyframes",
+        )
+
+    assert keyframes == []
+
+
+def test_extract_keyframes_skips_when_ffmpeg_times_out(tmp_path):
+    shots = [VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)]
+
+    with patch(
+        "app.video_understanding.keyframe_service.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd="ffmpeg", timeout=20),
+    ):
+        keyframes = extract_keyframes(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "keyframes",
+            public_prefix="/keyframes",
+        )
+
+    assert keyframes == []
+
+
+def test_extract_keyframes_skips_when_ffmpeg_fails(tmp_path):
+    shots = [VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)]
+
+    with patch(
+        "app.video_understanding.keyframe_service.subprocess.run",
+        return_value=CompletedProcess(args=["ffmpeg"], returncode=1, stdout="", stderr="bad input"),
+    ):
+        keyframes = extract_keyframes(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "keyframes",
+            public_prefix="/keyframes",
+        )
+
+    assert keyframes == []
+
+
+def test_extract_keyframes_passes_expected_ffmpeg_command_and_timeout(tmp_path):
+    shots = [VideoShot(index=3, start=2, end=4, duration=2, keyframe_time=3.25)]
+
+    def fake_run(args, **kwargs):
+        Path(args[-1]).write_bytes(b"jpg")
+        return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    with patch("app.video_understanding.keyframe_service.subprocess.run", side_effect=fake_run) as run:
+        keyframes = extract_keyframes(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "keyframes",
+            public_prefix="/keyframes/",
+        )
+
+    assert len(keyframes) == 1
+    assert "//" not in keyframes[0].public_url.removeprefix("/")
+    command = run.call_args.args[0]
+    assert "-ss" in command
+    assert "-frames:v" in command
+    assert "1" in command
+    assert "-q:v" in command
+    assert "2" in command
+    assert "-y" in command
+    assert run.call_args.kwargs["timeout"] == FFMPEG_TIMEOUT_SECONDS
+
+
+def test_extract_keyframes_returns_successes_and_logs_partial_failures(tmp_path, caplog):
+    shots = [
+        VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+        VideoShot(index=2, start=2, end=4, duration=2, keyframe_time=3),
+    ]
+
+    def fake_run(args, **kwargs):
+        if "0001" in args[-1]:
+            Path(args[-1]).write_bytes(b"jpg")
+            return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        return CompletedProcess(args=args, returncode=1, stdout="", stderr="bad input")
+
+    with (
+        caplog.at_level(logging.WARNING, logger="app.video_understanding.keyframe_service"),
+        patch("app.video_understanding.keyframe_service.subprocess.run", side_effect=fake_run),
+    ):
+        keyframes = extract_keyframes(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "keyframes",
+            public_prefix="/keyframes",
+        )
+
+    assert [keyframe.shot_index for keyframe in keyframes] == [1]
+    assert "shot_index=2" in caplog.text
+    assert "sample.mp4" in caplog.text
+    assert "bad input" in caplog.text
+
+
+def test_extract_keyframes_logs_warning_when_output_file_is_missing(tmp_path, caplog):
+    shots = [VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)]
+
+    with (
+        caplog.at_level(logging.WARNING, logger="app.video_understanding.keyframe_service"),
+        patch(
+            "app.video_understanding.keyframe_service.subprocess.run",
+            return_value=CompletedProcess(args=["ffmpeg"], returncode=0, stdout="", stderr=""),
+        ),
+    ):
+        keyframes = extract_keyframes(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "keyframes",
+            public_prefix="/keyframes",
+        )
+
+    assert keyframes == []
+    assert "target file was not created" in caplog.text
+    assert "shot_index=1" in caplog.text
+
+
+def test_extract_keyframes_returns_empty_and_logs_when_all_fail(tmp_path, caplog):
+    shots = [VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)]
+
+    with (
+        caplog.at_level(logging.WARNING, logger="app.video_understanding.keyframe_service"),
+        patch(
+            "app.video_understanding.keyframe_service.subprocess.run",
+            return_value=CompletedProcess(args=["ffmpeg"], returncode=1, stdout="", stderr="bad input"),
+        ),
+    ):
+        keyframes = extract_keyframes(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "keyframes",
+            public_prefix="/keyframes",
+        )
+
+    assert keyframes == []
+    assert "shot_index=1" in caplog.text
+    assert "bad input" in caplog.text
 
 
 def test_detect_video_signal_passes_threshold_to_scene_detection():

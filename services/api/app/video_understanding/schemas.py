@@ -19,6 +19,13 @@ class VideoShot(BaseModel):
     keyframe_time: float = Field(default=0, ge=0)
 
 
+class KeyframeEvidence(BaseModel):
+    shot_index: int = Field(gt=0)
+    keyframe_time: float = Field(ge=0)
+    local_path: str = Field(min_length=1)
+    public_url: str = Field(min_length=1)
+
+
 class RhythmMetrics(BaseModel):
     avg_shot_duration: float = 0
     cut_density: Literal["slow", "medium", "fast"] = "medium"
