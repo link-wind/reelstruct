@@ -78,6 +78,10 @@ packages/protocol/  # 结构迁移协议示例
 docs/               # 规划和实现文档
 ```
 
+## 交付说明
+
+- [AI 架构与交付说明](docs/ai-architecture-and-delivery.md)：对应课题要求，说明整体架构、工具协议、安全边界、已完成能力和后续差距。
+
 ## 本地启动
 
 启动后端：
