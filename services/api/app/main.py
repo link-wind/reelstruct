@@ -40,6 +40,7 @@ from app.run_record_service import (
     update_demo_run_pinned,
     update_demo_run_preferred,
 )
+from app.run_export_service import build_run_export_zip
 from app.sample_service import extract_transcript_upload, save_sample_upload
 from app.structure_service import build_structure_preview
 from app.template_record_service import (
@@ -161,6 +162,18 @@ def get_run_record(run_id: str) -> DemoRunResponse:
     if record is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return record
+
+
+@app.get("/api/runs/{run_id}/export.zip")
+def export_run_package(run_id: str) -> Response:
+    record = load_demo_run_record(run_id, RUNS_DIR)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return Response(
+        content=build_run_export_zip(record),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="reelstruct-{run_id}.zip"'},
+    )
 
 
 @app.get("/api/runs/batches/{batch_id}", response_model=RunBatchResponse)

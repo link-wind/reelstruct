@@ -16,6 +16,7 @@ ReelStruct 是一个短视频结构迁移 MVP。它把样例视频拆成 Hook、
 - 已拍 / 已交付素材会进入可用素材池，重新生成时减少缺口并参与视频重组
 - 可上传真实补拍视频并绑定到结构槽位，重生成时优先使用上传素材
 - 成片结果展示每个槽位的素材来源：用户上传、fixture 匹配或补位策略
+- 可下载结果包，集中交付 run JSON、素材需求单、素材来源说明和最终 MP4
 - fixture 素材匹配和 FFmpeg 竖屏 MP4 demo 渲染
 - 默认版、高点击版、高转化版、高节奏版四种输出版本
 - 四版本摘要对比和批量生成真实 demo
@@ -57,6 +58,7 @@ ReelStruct 是一个短视频结构迁移 MVP。它把样例视频拆成 Hook、
 - `POST /api/runs/demo-variants`：批量生成四个版本 demo，并写入同一个 `batch_id`
 - `GET /api/runs`：读取最近 run 记录，支持搜索、状态、模板、标签筛选
 - `GET /api/runs/{run_id}`：读取 run 详情
+- `GET /api/runs/{run_id}/export.zip`：下载结果包，包含 run JSON、素材需求单、素材来源说明和最终 MP4
 - `GET /api/runs/batches/{batch_id}`：读取同批次四个版本摘要和首选状态
 - `PATCH /api/runs/{run_id}/note`：保存 run 备注
 - `PATCH /api/runs/{run_id}/pin`：置顶 / 取消置顶
@@ -110,7 +112,8 @@ npm run dev
 7. 重新生成 demo，让上传素材优先进入对应槽位
 8. 在批次工作台或最近 run 记录里比较 Hook、CTA、时长、缺口和视频结果
 9. 点击“设为首选”确定同批次最终版本
-10. 可把满意 run 保存为结构模板
+10. 点击“下载结果包”交付 run JSON、素材需求单、素材来源说明和最终 MP4
+11. 可把满意 run 保存为结构模板
 ```
 
 ## 验证

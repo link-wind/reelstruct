@@ -4,6 +4,7 @@ const playwrightModule =
 
 const { chromium } = await import(playwrightModule);
 const { fileURLToPath } = await import("node:url");
+const { spawnSync } = await import("node:child_process");
 
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3002";
 const chromePath = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -323,6 +324,23 @@ try {
   }
   if (!jsonText.includes("\"variant\": \"high_click\"")) {
     throw new Error("missing persisted output variant in exported templated json");
+  }
+
+  const [zipDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "下载结果包" }).click(),
+  ]);
+  const zipDownloadPath = await zipDownload.path();
+  if (!zipDownloadPath) {
+    throw new Error("missing exported run package path");
+  }
+  const zipList = spawnSync("unzip", ["-l", zipDownloadPath], { encoding: "utf-8" });
+  if (zipList.status !== 0 || !zipList.stdout.includes("run.json") || !zipList.stdout.includes("material-sources.txt") || !zipList.stdout.includes("final-demo.mp4")) {
+    throw new Error("missing expected files in exported run package");
+  }
+  const sourceText = spawnSync("unzip", ["-p", zipDownloadPath, "material-sources.txt"], { encoding: "utf-8" }).stdout;
+  if (!sourceText.includes("素材来源说明") || !sourceText.includes("fixture 匹配")) {
+    throw new Error("missing material source explanation in exported run package");
   }
 
   const currentRunMatch = bodyTextAfterRollbackRun.match(/Run:\s*(demo-[a-z0-9]{8})/);

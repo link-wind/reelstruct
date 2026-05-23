@@ -816,6 +816,15 @@ export default function ReelStructWorkspace() {
     }
   }
 
+  const downloadRunPackage = () => {
+    if (!run) return
+    const link = document.createElement('a')
+    link.href = `/api/runs/${run.run_id}/export.zip`
+    link.download = `reelstruct-${run.run_id}.zip`
+    link.click()
+    setStatus('结果包已开始下载')
+  }
+
   const loadRunRecord = async (runId: string) => {
     try {
       const response = await fetch(`/api/runs/${runId}`)
@@ -1721,6 +1730,14 @@ export default function ReelStructWorkspace() {
               type="button"
             >
               导出 run JSON
+            </button>
+            <button
+              className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700 disabled:text-slate-300"
+              onClick={downloadRunPackage}
+              disabled={!run}
+              type="button"
+            >
+              下载结果包
             </button>
             <button
               className="rounded-md border border-line px-3 py-2 text-xs font-medium text-slate-700"

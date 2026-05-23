@@ -1,3 +1,6 @@
+from io import BytesIO
+from zipfile import ZipFile
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -42,6 +45,51 @@ def test_create_demo_run_returns_preview_assets_video_and_trace():
         "done",
     ]
     assert body["trace"][-1]["progress"] == 100
+
+
+def test_export_demo_run_package_contains_run_video_request_sheet_and_sources():
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {
+                "title": "导出包样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先讲亮点，再展示过程。",
+            },
+            "content": {
+                "topic": "导出包短视频",
+                "product_name": "导出包门店",
+                "selling_points": ["卖点一", "卖点二"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+            "material_request_sheet": [
+                {"slot_id": "selling_points", "status": "待补拍"},
+                {"slot_id": "cta", "status": "已交付"},
+            ],
+        },
+    )
+
+    assert create_response.status_code == 200
+    run_id = create_response.json()["run_id"]
+    export_response = client.get(f"/api/runs/{run_id}/export.zip")
+
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"] == "application/zip"
+    assert f"reelstruct-{run_id}.zip" in export_response.headers["content-disposition"]
+    with ZipFile(BytesIO(export_response.content)) as archive:
+        names = set(archive.namelist())
+        assert "run.json" in names
+        assert "material-request-sheet.txt" in names
+        assert "material-sources.txt" in names
+        assert "final-demo.mp4" in names
+        assert run_id in archive.read("run.json").decode("utf-8")
+        assert "素材需求单" in archive.read("material-request-sheet.txt").decode("utf-8")
+        assert "当前状态：待补拍" in archive.read("material-request-sheet.txt").decode("utf-8")
+        assert "素材来源说明" in archive.read("material-sources.txt").decode("utf-8")
+        assert "fixture 匹配" in archive.read("material-sources.txt").decode("utf-8")
 
 
 def test_create_demo_run_applies_mapping_overrides_to_preview_and_tracks():
