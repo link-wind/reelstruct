@@ -103,20 +103,19 @@ PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 
 ```bash
 cd services/api
-OPENAI_API_KEY="你的 key" \
-PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
+cp .env.example .env
 ```
 
-如果使用 OpenAI 兼容中转站：
+编辑 `services/api/.env`：
 
-```bash
-cd services/api
-OPENAI_API_KEY="你的中转站 key" \
-OPENAI_BASE_URL="https://你的中转站地址/v1" \
-REELSTRUCT_VISION_MODEL="你的视觉模型名" \
-REELSTRUCT_STRUCTURE_MODEL="你的结构拆解模型名" \
-PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
+```text
+OPENAI_API_KEY=你的 key
+OPENAI_BASE_URL=https://你的中转站地址/v1
+REELSTRUCT_VISION_MODEL=你的视觉模型名
+REELSTRUCT_STRUCTURE_MODEL=你的结构拆解模型名
 ```
+
+`OPENAI_BASE_URL` 填 OpenAI 兼容服务的 `/v1` 地址即可；如果不用中转站，保持 `https://api.openai.com/v1`。`.env` 不会提交到 git，shell 里临时设置的同名变量会优先于 `.env`。
 
 启动前端：
 

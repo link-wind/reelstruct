@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
 
+from app.environment import load_api_env
 from app.fixture_asset_service import build_render_clips_from_composition
 from app.models import (
     CreateTemplateFromRunRequest,
@@ -58,6 +59,7 @@ from app.workflow_service import create_demo_run
 from app.video_understanding.pipeline import build_ai_or_fallback_structure_template
 
 
+load_api_env()
 app = FastAPI(title="ReelStruct API")
 STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 DOWNLOADS_DIR = STORAGE_DIR / "downloads"
