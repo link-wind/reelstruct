@@ -177,6 +177,46 @@ def test_analyze_keyframe_visuals_posts_data_url_and_returns_analysis(monkeypatc
     assert posted["headers"]["Authorization"] == "Bearer test-secret-key"
 
 
+def test_analyze_keyframe_visuals_uses_openai_base_url(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://relay.example.com/v1/")
+    posted = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "output_text": (
+                    '{"visual_summary":"A clean product close-up.","subject_type":"product",'
+                    '"scene_type":"studio","packaging_signals":[],"confidence":0.87,"warnings":[]}'
+                )
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            posted["url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr("app.video_understanding.ai_vision_service.httpx.Client", FakeClient)
+
+    from app.video_understanding.ai_vision_service import analyze_keyframe_visuals
+
+    analyze_keyframe_visuals([_keyframe_with_image(tmp_path)])
+
+    assert posted["url"] == "https://relay.example.com/v1/responses"
+
+
 def test_analyze_keyframe_visuals_wraps_http_status_error(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
 
@@ -331,6 +371,56 @@ def test_decompose_video_structure_with_ai_posts_prompt_and_returns_analysis(mon
     assert posted["headers"]["Authorization"] == "Bearer test-secret-key"
     assert "test-secret-key" not in str(posted["json"])
     assert "shot_evidence" in posted["json"]["input"][0]["content"][0]["text"]
+
+
+def test_decompose_video_structure_with_ai_uses_openai_base_url(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://relay.example.com/v1")
+    posted = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "output_text": (
+                    '{"source":"ai","headline":"痛点种草型结构","segments":[{"id":"seg_1","label":"痛点 Hook",'
+                    '"type":"hook","start":0.0,"end":3.0,"shot_indices":[1],"purpose":"吸引停留",'
+                    '"method":"痛点提问+大标题","evidence":"第1镜头出现痛点字幕","rhythm":"快进入",'
+                    '"packaging":"大标题","required_asset":"开头近景","transferable_rule":"先抛问题",'
+                    '"non_transferable":"不要照搬商品名","confidence":0.88}],"rhythm_structure":{"summary":"前段快进入"},'
+                    '"packaging_structure":{"caption_density":"高","title_style":"开头大标题"},'
+                    '"confidence":0.83,"warnings":[]}'
+                )
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            posted["url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr("app.video_understanding.ai_structure_service.httpx.Client", FakeClient)
+
+    from app.video_understanding.ai_structure_service import decompose_video_structure_with_ai
+
+    decompose_video_structure_with_ai(
+        title="护肤样例",
+        signal=_sample_signal(),
+        evidence=_sample_shot_evidence(),
+        transcript_summary="开头提出痛点。中段展示效果。结尾引导下单。",
+    )
+
+    assert posted["url"] == "https://relay.example.com/v1/responses"
 
 
 @pytest.mark.parametrize(

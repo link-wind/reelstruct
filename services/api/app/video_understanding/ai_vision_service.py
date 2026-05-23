@@ -7,9 +7,9 @@ from typing import Any
 
 import httpx
 
+from app.video_understanding.openai_config import openai_responses_url
 from app.video_understanding.schemas import KeyframeEvidence, ShotVisualAnalysis
 
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_VISION_MODEL = "gpt-4.1-mini"
 OPENAI_TIMEOUT_SECONDS = 60
 _JSON_FENCE_RE = re.compile(r"^```\s*(?:json)?\s*(?P<body>.*?)\s*```$", re.DOTALL | re.IGNORECASE)
@@ -50,7 +50,7 @@ def _analyze_one_keyframe(
 
     try:
         response = client.post(
-            OPENAI_RESPONSES_URL,
+            openai_responses_url(),
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",

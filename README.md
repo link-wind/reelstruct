@@ -15,6 +15,7 @@ ReelStruct 是一个短视频结构迁移 MVP。它把样例视频拆成 Hook、
 - 结构迁移预览和槽位级文案改写
 - 每个槽位展示“样例方法 -> 新内容迁移 -> 素材/包装支撑”的迁移解释
 - 素材缺口识别、补拍建议、素材需求单复制 / 导出
+- AI 样例拆解：真实视频信号、关键帧视觉理解、结构段落推理、证据镜头和置信度展示
 - 已拍 / 已交付素材会进入可用素材池，重新生成时减少缺口并参与视频重组
 - 可上传真实补拍视频并绑定到结构槽位，重生成时优先使用上传素材
 - 上传素材会生成基础适配分析：时长、镜头数、推荐槽位、推荐理由和槽位适配分
@@ -45,10 +46,11 @@ ReelStruct 是一个短视频结构迁移 MVP。它把样例视频拆成 Hook、
 - 前端：Next.js、React、TypeScript、Tailwind CSS
 - 后端：FastAPI、Pydantic
 - 视频处理：FFmpeg
+- AI 接入：OpenAI Responses API 兼容接口，支持 `OPENAI_BASE_URL` 中转站
 - 本地素材：fixture 视频素材库
 - 参考方向：Hyperframes 的时间线描述思路，Remotion 的组件化视频思路
 
-当前 AI 拆解仍是 deterministic 规则逻辑，后续再接入 LLM / Agent / 异步任务队列。
+没有配置 API key 时，系统会明确降级为基础兜底拆解，不会把兜底结果伪装成 AI。
 
 ## 主要接口
 
@@ -94,6 +96,25 @@ cd services/api
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
+```
+
+启用 AI 拆解：
+
+```bash
+cd services/api
+OPENAI_API_KEY="你的 key" \
+PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
+```
+
+如果使用 OpenAI 兼容中转站：
+
+```bash
+cd services/api
+OPENAI_API_KEY="你的中转站 key" \
+OPENAI_BASE_URL="https://你的中转站地址/v1" \
+REELSTRUCT_VISION_MODEL="你的视觉模型名" \
+REELSTRUCT_STRUCTURE_MODEL="你的结构拆解模型名" \
 PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8010
 ```
 

@@ -5,9 +5,9 @@ from typing import Any
 
 import httpx
 
+from app.video_understanding.openai_config import openai_responses_url
 from app.video_understanding.schemas import AIStructureAnalysis, ShotEvidence, VideoSignal
 
-OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 DEFAULT_STRUCTURE_MODEL = "gpt-4.1-mini"
 OPENAI_TIMEOUT_SECONDS = 90
 _JSON_FENCE_RE = re.compile(r"^```\s*(?:json)?\s*(?P<body>.*?)\s*```$", re.DOTALL | re.IGNORECASE)
@@ -38,7 +38,7 @@ def decompose_video_structure_with_ai(
     with httpx.Client(timeout=OPENAI_TIMEOUT_SECONDS) as client:
         try:
             response = client.post(
-                OPENAI_RESPONSES_URL,
+                openai_responses_url(),
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
