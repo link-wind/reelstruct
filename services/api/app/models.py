@@ -1,6 +1,10 @@
-from typing import Literal
+from __future__ import annotations
+
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
+
+from app.video_understanding.schemas import KeyframeEvidence, VideoSignal
 
 
 class SampleVideoInput(BaseModel):
@@ -16,6 +20,8 @@ class SampleUploadResponse(BaseModel):
     local_path: str
     public_url: str
     sample: SampleVideoInput
+    video_signal: Optional[VideoSignal] = None
+    keyframes: list[KeyframeEvidence] = Field(default_factory=list)
 
 
 class TranscriptUploadResponse(BaseModel):

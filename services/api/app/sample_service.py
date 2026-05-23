@@ -6,13 +6,21 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from app.models import SampleUploadResponse, SampleVideoInput, TranscriptUploadResponse
+from app.video_understanding.keyframe_service import extract_keyframes
+from app.video_understanding.shot_detector import detect_video_signal
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_SAMPLE_DIR = PROJECT_ROOT / "services" / "api" / "storage" / "samples"
+DEFAULT_KEYFRAMES_DIR = PROJECT_ROOT / "services" / "api" / "storage" / "keyframes"
 
 
-def save_sample_upload(file: UploadFile, *, sample_dir: Optional[Path] = None) -> SampleUploadResponse:
+def save_sample_upload(
+    file: UploadFile,
+    *,
+    sample_dir: Optional[Path] = None,
+    keyframes_dir: Optional[Path] = None,
+) -> SampleUploadResponse:
     target_dir = sample_dir or DEFAULT_SAMPLE_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -24,8 +32,15 @@ def save_sample_upload(file: UploadFile, *, sample_dir: Optional[Path] = None) -
     with target_path.open("wb") as handle:
         handle.write(file.file.read())
 
-    duration = probe_video_duration(target_path) or 30.0
-    shot_count = detect_shot_count(target_path) or estimate_shot_count(duration)
+    video_signal = detect_video_signal(target_path)
+    target_keyframes_dir = (keyframes_dir or DEFAULT_KEYFRAMES_DIR) / sample_id
+    keyframes = extract_keyframes(
+        target_path,
+        video_signal.shots,
+        output_dir=target_keyframes_dir,
+        public_prefix=f"/keyframes/{sample_id}",
+    )
+
     return SampleUploadResponse(
         sample_id=sample_id,
         filename=filename,
@@ -33,10 +48,12 @@ def save_sample_upload(file: UploadFile, *, sample_dir: Optional[Path] = None) -
         public_url=f"/samples/{filename}",
         sample=SampleVideoInput(
             title=file.filename or filename,
-            duration=round(duration, 1),
-            shot_count=shot_count,
-            transcript_summary="已上传样例视频，第一版先基于时长和镜头节奏做结构拆解。",
+            duration=round(video_signal.metadata.duration, 1),
+            shot_count=video_signal.shot_count,
+            transcript_summary="已上传样例视频，系统已完成真实视频信号解析，等待 AI 视频结构拆解。",
         ),
+        video_signal=video_signal,
+        keyframes=keyframes,
     )
 
 

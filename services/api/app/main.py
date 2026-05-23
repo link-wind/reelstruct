@@ -60,12 +60,14 @@ STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 DOWNLOADS_DIR = STORAGE_DIR / "downloads"
 OUTPUT_DIR = STORAGE_DIR / "output"
 SAMPLES_DIR = STORAGE_DIR / "samples"
+KEYFRAMES_DIR = STORAGE_DIR / "keyframes"
 MATERIALS_DIR = STORAGE_DIR / "materials"
 RUNS_DIR = STORAGE_DIR / "runs"
 TEMPLATES_DIR = STORAGE_DIR / "templates"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+KEYFRAMES_DIR.mkdir(parents=True, exist_ok=True)
 MATERIALS_DIR.mkdir(parents=True, exist_ok=True)
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
@@ -73,6 +75,7 @@ TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
 app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
 app.mount("/samples", StaticFiles(directory=str(SAMPLES_DIR)), name="samples")
+app.mount("/keyframes", StaticFiles(directory=str(KEYFRAMES_DIR)), name="keyframes")
 app.mount("/materials", StaticFiles(directory=str(MATERIALS_DIR)), name="materials")
 
 
@@ -278,7 +281,13 @@ def delete_template(template_id: str) -> Response:
 
 @app.post("/api/samples/upload", response_model=SampleUploadResponse)
 def upload_sample_video(file: UploadFile) -> SampleUploadResponse:
-    return save_sample_upload(file, sample_dir=SAMPLES_DIR)
+    try:
+        return save_sample_upload(file, sample_dir=SAMPLES_DIR, keyframes_dir=KEYFRAMES_DIR)
+    except ValueError as exc:
+        detail = "视频解析失败，请确认上传有效视频文件。"
+        if str(exc):
+            detail = f"{detail} {str(exc)}"
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 
 @app.post("/api/samples/upload-transcript", response_model=TranscriptUploadResponse)

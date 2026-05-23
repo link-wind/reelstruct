@@ -260,6 +260,40 @@ type SampleVideoInput = {
   transcript_summary: string
 }
 
+type VideoShot = {
+  index: number
+  start: number
+  end: number
+  duration: number
+  keyframe_time: number
+}
+
+type VideoSignal = {
+  metadata: {
+    duration: number
+    fps: number
+    width: number
+    height: number
+    format_name: string
+  }
+  shot_count: number
+  detection_method: 'scene_detect' | 'uniform_fallback'
+  shots: VideoShot[]
+  rhythm_metrics: {
+    avg_shot_duration: number
+    cut_density: 'slow' | 'medium' | 'fast'
+    fastest_window: string
+    slowest_window: string
+  }
+}
+
+type KeyframeEvidence = {
+  shot_index: number
+  keyframe_time: number
+  local_path: string
+  public_url: string
+}
+
 type NewContentInput = {
   topic: string
   product_name: string
@@ -271,8 +305,11 @@ type NewContentInput = {
 type SampleUploadResponse = {
   sample_id: string
   filename: string
+  local_path: string
   public_url: string
   sample: SampleVideoInput
+  video_signal: VideoSignal | null
+  keyframes: KeyframeEvidence[]
 }
 
 type TranscriptUploadResponse = {
@@ -1208,9 +1245,41 @@ export default function ReelStructWorkspace() {
             <p>Duration: {sample.duration}s</p>
             <p>Shots: {sample.shot_count}</p>
             <p>Source: {sampleUpload?.public_url || 'default fixture input'}</p>
-            <p>Analysis: {sampleUpload ? 'scene detect' : 'default sample preset'}</p>
+            <p>
+              Resolution:{' '}
+              {sampleUpload?.video_signal
+                ? `${sampleUpload.video_signal.metadata.width}x${sampleUpload.video_signal.metadata.height}`
+                : 'default sample preset'}
+            </p>
+            <p>FPS: {sampleUpload?.video_signal ? sampleUpload.video_signal.metadata.fps.toFixed(2) : '-'}</p>
+            <p>Detection: {sampleUpload?.video_signal?.detection_method || 'default sample preset'}</p>
+            <p>
+              Avg shot:{' '}
+              {sampleUpload?.video_signal
+                ? `${sampleUpload.video_signal.rhythm_metrics.avg_shot_duration.toFixed(2)}s`
+                : '-'}
+            </p>
             <p>Transcript: {transcriptUpload?.filename || 'manual / default summary'}</p>
           </div>
+          {sampleUpload?.keyframes.length ? (
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {sampleUpload.keyframes.slice(0, 6).map((keyframe) => (
+                <figure
+                  key={`${keyframe.shot_index}-${keyframe.keyframe_time}`}
+                  className="overflow-hidden rounded-md border border-line bg-slate-100"
+                >
+                  <img
+                    className="aspect-video w-full object-cover"
+                    src={keyframe.public_url}
+                    alt={`Shot ${keyframe.shot_index}`}
+                  />
+                  <figcaption className="px-2 py-1 text-[11px] font-medium text-slate-600">
+                    Shot {keyframe.shot_index}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-lg border border-line bg-white p-5 shadow-panel">
