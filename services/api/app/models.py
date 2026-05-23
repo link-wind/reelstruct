@@ -23,11 +23,19 @@ class TranscriptUploadResponse(BaseModel):
     transcript_summary: str
 
 
+class UserSlotAsset(BaseModel):
+    slot_id: str
+    filename: str = ""
+    local_path: str = ""
+    public_url: str = ""
+
+
 class NewContentInput(BaseModel):
     topic: str
     product_name: str = ""
     selling_points: list[str] = Field(default_factory=list)
     available_assets: list[str] = Field(default_factory=list)
+    uploaded_assets: list[UserSlotAsset] = Field(default_factory=list)
 
 
 class StructureSlot(BaseModel):
@@ -112,6 +120,8 @@ class CompositionTrack(BaseModel):
     text: str = ""
     source: str = ""
     slot_id: str
+    asset_local_path: str = ""
+    asset_public_url: str = ""
 
 
 class CompositionSpec(BaseModel):

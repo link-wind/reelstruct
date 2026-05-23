@@ -14,6 +14,7 @@ ReelStruct 是一个短视频结构迁移 MVP。它把样例视频拆成 Hook、
 - 结构迁移预览和槽位级文案改写
 - 素材缺口识别、补拍建议、素材需求单复制 / 导出
 - 已拍 / 已交付素材会进入可用素材池，重新生成时减少缺口并参与视频重组
+- 可上传真实补拍视频并绑定到结构槽位，重生成时优先使用上传素材
 - fixture 素材匹配和 FFmpeg 竖屏 MP4 demo 渲染
 - 默认版、高点击版、高转化版、高节奏版四种输出版本
 - 四版本摘要对比和批量生成真实 demo
@@ -48,6 +49,7 @@ ReelStruct 是一个短视频结构迁移 MVP。它把样例视频拆成 Hook、
 
 - `POST /api/samples/upload`：上传样例视频
 - `POST /api/samples/upload-transcript`：上传 txt / srt 转写
+- `POST /api/materials/upload`：上传补拍素材并绑定到结构槽位
 - `POST /api/structure/preview`：生成结构迁移预览
 - `POST /api/structure/variants`：生成四种输出版本摘要
 - `POST /api/runs/demo`：生成单个 demo run
@@ -103,9 +105,11 @@ npm run dev
 3. 编辑目标主题、商品名、卖点和已有素材
 4. 点击“生成版本对比”查看四种版本摘要
 5. 点击“批量生成四版 demo”
-6. 在批次工作台或最近 run 记录里比较 Hook、CTA、时长、缺口和视频结果
-7. 点击“设为首选”确定同批次最终版本
-8. 可把满意 run 保存为结构模板
+6. 在素材需求单里上传补拍素材，或把任务标为已拍 / 已交付
+7. 重新生成 demo，让上传素材优先进入对应槽位
+8. 在批次工作台或最近 run 记录里比较 Hook、CTA、时长、缺口和视频结果
+9. 点击“设为首选”确定同批次最终版本
+10. 可把满意 run 保存为结构模板
 ```
 
 ## 验证

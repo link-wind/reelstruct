@@ -3,6 +3,23 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+def test_upload_material_asset_returns_slot_bound_asset():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/materials/upload",
+        data={"slot_id": "selling_points"},
+        files={"file": ("selling-points.mp4", b"uploaded material", "video/mp4")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["slot_id"] == "selling_points"
+    assert body["filename"].endswith(".mp4")
+    assert body["public_url"].startswith("/materials/")
+    assert body["local_path"].endswith(body["filename"])
+
+
 def test_prepare_demo_assets_endpoint_returns_render_clips():
     client = TestClient(app)
 

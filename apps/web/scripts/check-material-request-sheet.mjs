@@ -3,9 +3,11 @@ const playwrightModule =
   "file:///Users/linkwind/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.mjs";
 
 const { chromium } = await import(playwrightModule);
+const { fileURLToPath } = await import("node:url");
 
 const baseUrl = process.env.BASE_URL || "http://127.0.0.1:3002";
 const chromePath = process.env.CHROME_PATH || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const materialFixturePath = fileURLToPath(new URL("../../../fixtures/vid_001.mp4", import.meta.url));
 
 const browser = await chromium.launch({
   headless: true,
@@ -65,6 +67,12 @@ try {
   }
   await page.getByRole("button", { name: "加入需求单" }).click();
   await page.getByRole("button", { name: "已拍" }).first().click();
+  await page.getByLabel("卖点展开 上传补拍素材").setInputFiles(materialFixturePath);
+  await page.waitForTimeout(800);
+  const bodyTextAfterMaterialUpload = await page.locator("body").innerText();
+  if (!bodyTextAfterMaterialUpload.includes("补拍素材已绑定") || !bodyTextAfterMaterialUpload.includes("已上传 material-")) {
+    throw new Error("missing uploaded material binding state");
+  }
 
   const [download] = await Promise.all([
     page.waitForEvent("download"),

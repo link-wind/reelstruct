@@ -16,6 +16,7 @@ from app.models import (
     TransferMapping,
     TransferMappingOverride,
     TransferPlan,
+    UserSlotAsset,
 )
 
 
@@ -31,6 +32,7 @@ def build_structure_preview(
     template = apply_variant_to_template(template, variant)
     template = apply_slot_level_overrides(template, mapping_overrides)
     effective_content = apply_delivered_material_tasks_to_content(template, content, material_request_sheet)
+    effective_content = apply_uploaded_slot_assets_to_content(template, effective_content)
     gaps = detect_material_gaps(template, effective_content)
     transfer_plan = build_transfer_plan(
         template,
@@ -40,7 +42,7 @@ def build_structure_preview(
         mapping_overrides=mapping_overrides,
         material_request_sheet=material_request_sheet,
     )
-    composition = build_composition_spec(template, transfer_plan)
+    composition = build_composition_spec(template, transfer_plan, effective_content)
     return StructurePreviewResponse(
         template=template,
         transfer_plan=transfer_plan,
@@ -157,6 +159,29 @@ def apply_delivered_material_tasks_to_content(
     )
 
 
+def apply_uploaded_slot_assets_to_content(
+    template: TemplateStructure,
+    content: NewContentInput,
+) -> NewContentInput:
+    if not content.uploaded_assets:
+        return content
+
+    uploaded_slot_ids = {asset.slot_id for asset in content.uploaded_assets if asset.local_path or asset.public_url}
+    if not uploaded_slot_ids:
+        return content
+
+    uploaded_required_assets = [
+        slot.required_asset
+        for slot in template.script_pattern
+        if slot.id in uploaded_slot_ids
+    ]
+    return content.model_copy(
+        update={
+            "available_assets": _dedupe([*content.available_assets, *uploaded_required_assets]),
+        }
+    )
+
+
 def build_transfer_plan(
     template: TemplateStructure,
     content: NewContentInput,
@@ -216,12 +241,21 @@ def build_material_request_sheet(
 def build_composition_spec(
     template: TemplateStructure,
     transfer_plan: TransferPlan,
+    content: Optional[NewContentInput] = None,
 ) -> CompositionSpec:
     mapping_lookup = {mapping.slot_id: mapping for mapping in transfer_plan.mappings}
+    uploaded_asset_lookup: dict[str, UserSlotAsset] = {}
+    if content is not None:
+        uploaded_asset_lookup = {
+            asset.slot_id: asset
+            for asset in content.uploaded_assets
+            if asset.local_path or asset.public_url
+        }
     tracks: list[CompositionTrack] = []
 
     for slot in template.script_pattern:
         mapping = mapping_lookup[slot.id]
+        uploaded_asset = uploaded_asset_lookup.get(slot.id)
         tracks.append(
             CompositionTrack(
                 type="video",
@@ -237,6 +271,8 @@ def build_composition_spec(
                     ]
                 ),
                 slot_id=slot.id,
+                asset_local_path=uploaded_asset.local_path if uploaded_asset else "",
+                asset_public_url=uploaded_asset.public_url if uploaded_asset else "",
             )
         )
         tracks.append(

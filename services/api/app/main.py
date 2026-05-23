@@ -1,7 +1,7 @@
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
 
 from app.fixture_asset_service import build_render_clips_from_composition
@@ -25,9 +25,11 @@ from app.models import (
     StructureVariantsResponse,
     TranscriptUploadResponse,
     UpdateStructureTemplateRequest,
+    UserSlotAsset,
     StructurePreviewRequest,
     StructurePreviewResponse,
 )
+from app.material_asset_service import save_material_upload
 from app.render_service import render_demo_video
 from app.run_record_service import (
     delete_demo_run_record,
@@ -57,17 +59,20 @@ STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 DOWNLOADS_DIR = STORAGE_DIR / "downloads"
 OUTPUT_DIR = STORAGE_DIR / "output"
 SAMPLES_DIR = STORAGE_DIR / "samples"
+MATERIALS_DIR = STORAGE_DIR / "materials"
 RUNS_DIR = STORAGE_DIR / "runs"
 TEMPLATES_DIR = STORAGE_DIR / "templates"
 DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+MATERIALS_DIR.mkdir(parents=True, exist_ok=True)
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount("/downloads", StaticFiles(directory=str(DOWNLOADS_DIR)), name="downloads")
 app.mount("/output", StaticFiles(directory=str(OUTPUT_DIR)), name="output")
 app.mount("/samples", StaticFiles(directory=str(SAMPLES_DIR)), name="samples")
+app.mount("/materials", StaticFiles(directory=str(MATERIALS_DIR)), name="materials")
 
 
 @app.get("/health")
@@ -266,6 +271,11 @@ def upload_sample_video(file: UploadFile) -> SampleUploadResponse:
 @app.post("/api/samples/upload-transcript", response_model=TranscriptUploadResponse)
 def upload_sample_transcript(file: UploadFile) -> TranscriptUploadResponse:
     return extract_transcript_upload(file)
+
+
+@app.post("/api/materials/upload", response_model=UserSlotAsset)
+def upload_material_asset(slot_id: str = Form(...), file: UploadFile = File(...)) -> UserSlotAsset:
+    return save_material_upload(file, slot_id=slot_id, material_dir=MATERIALS_DIR)
 
 
 @app.post("/api/media/prepare-demo-assets", response_model=PrepareDemoAssetsResponse)

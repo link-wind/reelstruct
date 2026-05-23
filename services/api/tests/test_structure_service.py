@@ -8,6 +8,7 @@ from app.models import (
     StructureSlot,
     TemplateStructure,
     TransferMappingOverride,
+    UserSlotAsset,
 )
 from app.structure_service import build_structure_preview
 
@@ -78,6 +79,38 @@ def test_build_structure_preview_treats_delivered_material_tasks_as_available_as
         MaterialRequestTask(slot_id="selling_points", status="已拍"),
         MaterialRequestTask(slot_id="cta", status="待补拍"),
     ]
+
+
+def test_build_structure_preview_binds_uploaded_slot_assets_to_composition_tracks():
+    response = build_structure_preview(
+        sample=SampleVideoInput(title="咖啡样例", duration=20, shot_count=6),
+        content=NewContentInput(
+            topic="咖啡店开业",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+            uploaded_assets=[
+                UserSlotAsset(
+                    slot_id="selling_points",
+                    filename="selling-points.mp4",
+                    local_path="/tmp/selling-points.mp4",
+                    public_url="/materials/selling-points.mp4",
+                )
+            ],
+        ),
+    )
+
+    video_track_lookup = {
+        track.slot_id: track
+        for track in response.composition.tracks
+        if track.type == "video"
+    }
+    mapping_lookup = {mapping.slot_id: mapping for mapping in response.transfer_plan.mappings}
+
+    assert {gap.slot_id for gap in response.transfer_plan.gaps} == {"cta"}
+    assert mapping_lookup["selling_points"].asset_strategy == "使用已有素材：商品特写镜头"
+    assert video_track_lookup["selling_points"].asset_local_path == "/tmp/selling-points.mp4"
+    assert video_track_lookup["selling_points"].asset_public_url == "/materials/selling-points.mp4"
 
 
 def test_build_structure_preview_uses_transcript_summary_for_hook_and_cta_evidence():

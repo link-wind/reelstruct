@@ -79,3 +79,37 @@ def test_build_render_clips_from_composition_uses_video_tracks(tmp_path):
     assert clips[0].scene_id == "selling_points"
     assert clips[0].caption == "突出手作咖啡"
     assert Path(clips[0].local_path).exists()
+
+
+def test_build_render_clips_from_composition_prefers_uploaded_slot_asset(tmp_path):
+    write_fixture_library(tmp_path)
+    uploaded_path = tmp_path / "uploads" / "selling-points.mp4"
+    uploaded_path.parent.mkdir()
+    uploaded_path.write_bytes(b"uploaded material")
+    composition = CompositionSpec(
+        duration=6,
+        tracks=[
+            CompositionTrack(
+                type="video",
+                start=0,
+                duration=3,
+                source="咖啡 商品特写镜头",
+                slot_id="selling_points",
+                asset_local_path=str(uploaded_path),
+                asset_public_url="/materials/selling-points.mp4",
+            ),
+            CompositionTrack(type="caption", start=0.5, duration=2, text="突出手作咖啡", slot_id="selling_points"),
+        ],
+    )
+
+    clips = build_render_clips_from_composition(
+        composition,
+        fixture_root=tmp_path,
+        output_dir=tmp_path / "downloads",
+    )
+
+    assert len(clips) == 1
+    assert clips[0].scene_id == "selling_points"
+    assert clips[0].local_path == str(uploaded_path)
+    assert clips[0].public_url == "/materials/selling-points.mp4"
+    assert clips[0].caption == "突出手作咖啡"

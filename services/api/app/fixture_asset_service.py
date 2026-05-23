@@ -102,6 +102,20 @@ def build_render_clips_from_composition(
     }
     clips: list[RenderClip] = []
     for index, track in enumerate([item for item in composition.tracks if item.type == "video"], start=1):
+        uploaded_path = Path(track.asset_local_path) if track.asset_local_path else None
+        if uploaded_path and uploaded_path.is_file():
+            clips.append(
+                RenderClip(
+                    scene_id=track.slot_id,
+                    local_path=str(uploaded_path),
+                    public_url=track.asset_public_url,
+                    caption=caption_lookup.get(track.slot_id, ""),
+                    start_time=track.start,
+                    duration=track.duration,
+                )
+            )
+            continue
+
         keywords = _normalize_keywords([track.source, track.slot_id])
         candidates = search_fixture_assets(keywords, fixture_root=fixture_root, max_results=1)
         if not candidates:

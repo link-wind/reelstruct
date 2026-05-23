@@ -35,6 +35,13 @@ type MaterialRequestSheetItem = {
   gap: MaterialGap | undefined
 }
 
+type UserSlotAsset = {
+  slot_id: string
+  filename: string
+  local_path: string
+  public_url: string
+}
+
 type TransferMapping = {
   slot_id: string
   source_label: string
@@ -49,6 +56,8 @@ type CompositionTrack = {
   text: string
   source: string
   slot_id: string
+  asset_local_path: string
+  asset_public_url: string
 }
 
 type StructurePreviewResponse = {
@@ -220,6 +229,7 @@ type NewContentInput = {
   product_name: string
   selling_points: string[]
   available_assets: string[]
+  uploaded_assets: UserSlotAsset[]
 }
 
 type SampleUploadResponse = {
@@ -298,6 +308,7 @@ const defaultContent: NewContentInput = {
   product_name: '巷口手作咖啡',
   selling_points: ['手作拉花', '新店开业优惠', '安静办公空间'],
   available_assets: ['开头吸引镜头', '使用过程镜头'],
+  uploaded_assets: [],
 }
 
 const outputVariants: Array<{ value: OutputVariant; label: string }> = [
@@ -374,6 +385,10 @@ export default function ReelStructWorkspace() {
   const requestSheetText = useMemo(() => {
     return buildMaterialRequestSheetText(requestSheetItems, requestSheetStatus)
   }, [requestSheetItems, requestSheetStatus])
+
+  const uploadedAssetLookup = useMemo(() => {
+    return new Map(content.uploaded_assets.map((asset) => [asset.slot_id, asset]))
+  }, [content.uploaded_assets])
 
   const selectedTemplate = useMemo(() => {
     return templates.find((item) => item.template_id === selectedTemplateId) || null
@@ -491,6 +506,43 @@ export default function ReelStructWorkspace() {
     } catch (caught) {
       setStatus('上传失败')
       setError(caught instanceof Error ? caught.message : '未知错误')
+    }
+  }
+
+  const uploadMaterialAsset = async (slotId: string, file: File | null) => {
+    if (!file) return
+
+    setError('')
+    setStatus('正在上传补拍素材')
+    const formData = new FormData()
+    formData.append('slot_id', slotId)
+    formData.append('file', file)
+
+    try {
+      const response = await fetch('/api/materials/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        throw new Error(`上传补拍素材失败：${response.status} ${await response.text()}`)
+      }
+      const uploadedAsset = (await response.json()) as UserSlotAsset
+      setContent((current) => ({
+        ...current,
+        uploaded_assets: [
+          ...current.uploaded_assets.filter((asset) => asset.slot_id !== uploadedAsset.slot_id),
+          uploadedAsset,
+        ],
+      }))
+      setRequestSheetStatus((current) => ({
+        ...current,
+        [slotId]: '已拍',
+      }))
+      setRequestSheetFeedback('补拍素材已上传')
+      setStatus('补拍素材已绑定')
+    } catch (caught) {
+      setStatus('上传失败')
+      setError(caught instanceof Error ? caught.message : '上传补拍素材失败')
     }
   }
 
@@ -2196,6 +2248,9 @@ export default function ReelStructWorkspace() {
                     const status = requestSheetStatus[item.task.slot_id] ?? item.task.status
                     return (
                       <article key={item.task.slot_id} className="rounded-md border border-line bg-slate-50 p-4">
+                        {(() => {
+                          const uploadedAsset = uploadedAssetLookup.get(item.task.slot_id)
+                          return (
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <strong className="text-sm">{labelForSlot(item.task.slot_id)}</strong>
@@ -2210,6 +2265,11 @@ export default function ReelStructWorkspace() {
                                 已补齐素材
                               </span>
                             ) : null}
+                            {uploadedAsset ? (
+                              <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700">
+                                已上传 {uploadedAsset.filename}
+                              </span>
+                            ) : null}
                           </div>
                           <button
                             className="rounded-md border border-line bg-white px-3 py-2 text-xs font-medium text-slate-700"
@@ -2219,9 +2279,21 @@ export default function ReelStructWorkspace() {
                             移出需求单
                           </button>
                         </div>
+                          )
+                        })()}
                         <p className="mt-2 text-sm leading-6 text-slate-700">
                           {item.gap?.fill_strategy || `已可使用素材：${item.slot.required_asset}`}
                         </p>
+                        <label className="mt-3 grid gap-2 text-xs font-medium text-slate-700">
+                          上传补拍素材
+                          <input
+                            aria-label={`${labelForSlot(item.task.slot_id)} 上传补拍素材`}
+                            className="block w-full text-xs"
+                            type="file"
+                            accept="video/*"
+                            onChange={(event) => void uploadMaterialAsset(item.task.slot_id, event.target.files?.[0] || null)}
+                          />
+                        </label>
                         <div className="mt-3 flex flex-wrap gap-2">
                           {materialTaskStatuses.map((nextStatus) => {
                             const active = status === nextStatus
