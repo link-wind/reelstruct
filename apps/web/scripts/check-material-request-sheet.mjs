@@ -61,8 +61,11 @@ try {
   if (!bodyTextAfterBatchRun.includes("样例方法") || !bodyTextAfterBatchRun.includes("新内容迁移") || !bodyTextAfterBatchRun.includes("素材/包装支撑")) {
     throw new Error("missing explainable structure migration columns");
   }
-  if (!bodyTextAfterBatchRun.includes("结构拆解来源") || !(bodyTextAfterBatchRun.includes("AI 视频结构拆解") || bodyTextAfterBatchRun.includes("基础兜底拆解") || bodyTextAfterBatchRun.includes("基础规则拆解"))) {
-    throw new Error("missing structure decomposition source label");
+  if (!bodyTextAfterBatchRun.includes("结构拆解来源") || !bodyTextAfterBatchRun.includes("证据镜头")) {
+    throw new Error("missing AI structure decomposition evidence display");
+  }
+  if (!(bodyTextAfterBatchRun.includes("AI 视频结构拆解") || bodyTextAfterBatchRun.includes("基础兜底拆解") || bodyTextAfterBatchRun.includes("基础规则拆解"))) {
+    throw new Error("missing decomposition source label");
   }
   if (!bodyTextAfterBatchRun.includes("可迁移规则") || !bodyTextAfterBatchRun.includes("迁移理由")) {
     throw new Error("missing transfer reasoning details");

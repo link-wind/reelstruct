@@ -1587,16 +1587,12 @@ export default function ReelStructWorkspace() {
                       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
                         需求素材：{slot.required_asset}
                       </span>
-                      {slot.evidence_shot_indices?.length ? (
-                        <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
-                          证据镜头：{slot.evidence_shot_indices.join(' / ')}
-                        </span>
-                      ) : null}
-                      {slot.confidence ? (
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
-                          置信度：{(slot.confidence * 100).toFixed(0)}%
-                        </span>
-                      ) : null}
+                      <span className="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700">
+                        证据镜头：{slot.evidence_shot_indices?.length ? `Shot ${slot.evidence_shot_indices.join(' / ')}` : '未绑定具体镜头'}
+                      </span>
+                      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">
+                        段落置信度：{slot.confidence ? `${(slot.confidence * 100).toFixed(0)}%` : '未提供'}
+                      </span>
                     </div>
                   </div>
 
