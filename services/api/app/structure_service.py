@@ -68,6 +68,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
             purpose="开头制造注意力，快速给出痛点或结果承诺。",
             required_asset="开头吸引镜头",
             sample_evidence=transcript_beats["hook"] or f"{sample.title} 在开头约 {round(hook_duration, 1)} 秒建立注意力。",
+            **_slot_method_profile("hook"),
         ),
         StructureSlot(
             id="selling_points",
@@ -77,6 +78,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
             purpose="连续推进核心卖点，保持信息密度。",
             required_asset="商品特写镜头",
             sample_evidence=f"样例中段通过 {sample.shot_count} 个镜头维持节奏。",
+            **_slot_method_profile("selling_points"),
         ),
         StructureSlot(
             id="usage",
@@ -86,6 +88,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
             purpose="展示真实使用语境，降低理解成本。",
             required_asset="使用过程镜头",
             sample_evidence=transcript_beats["usage"] or sample.transcript_summary or "样例在中后段补充场景说明。",
+            **_slot_method_profile("usage"),
         ),
         StructureSlot(
             id="cta",
@@ -95,6 +98,7 @@ def extract_template_structure(sample: SampleVideoInput) -> TemplateStructure:
             purpose="收束行动号召，强化记忆点。",
             required_asset="结尾 CTA 镜头",
             sample_evidence=transcript_beats["cta"] or "样例结尾保留明确收束段落。",
+            **_slot_method_profile("cta"),
         ),
     ]
 
@@ -208,6 +212,12 @@ def build_transfer_plan(
                 source_label=slot.label,
                 target_message=target_message,
                 asset_strategy=asset_strategy,
+                source_method=slot.method,
+                target_adaptation=_target_adaptation_for_slot(slot, content, target_message),
+                reasoning=_transfer_reasoning_for_slot(slot),
+                asset_requirement=slot.required_asset,
+                packaging_plan=slot.packaging_intent,
+                fallback_strategy=gap_lookup.get(slot.id).fill_strategy if gap_lookup.get(slot.id) else asset_strategy,
             )
         )
 
@@ -393,6 +403,68 @@ def _variant_label(variant: str) -> str:
         "fast_rhythm": "高节奏版",
     }
     return labels.get(variant, "")
+
+
+def _slot_method_profile(slot_id: str) -> dict[str, str]:
+    profiles = {
+        "hook": {
+            "role": "吸引注意",
+            "method": "结果先行 + 视觉记忆点",
+            "intent": "让观众在前几秒理解为什么值得继续看",
+            "rhythm": "前段快进入，字幕和画面同时给出主信息",
+            "transferable_rule": "保留先给结果或反差画面、再补一句利益承诺的创作方法。",
+            "non_transferable": "不复制样例中的具体商品、门店名、画面内容和原始文案。",
+            "packaging_intent": "用大标题、强字幕或开场卡片强化停留。",
+        },
+        "selling_points": {
+            "role": "建立兴趣",
+            "method": "利益点连续推进",
+            "intent": "让观众快速知道新内容的核心价值",
+            "rhythm": "信息密集，一镜一卖点，避免长停顿",
+            "transferable_rule": "保留按优先级连续展开卖点的结构，不照搬原样例卖点。",
+            "non_transferable": "不复制样例的具体优惠、价格、品牌描述。",
+            "packaging_intent": "用卖点卡片、关键词高亮和短字幕提高信息密度。",
+        },
+        "usage": {
+            "role": "场景证明",
+            "method": "真实场景证明",
+            "intent": "降低理解成本，让卖点落到可感知场景里",
+            "rhythm": "中段放慢半拍，给观众看清使用过程",
+            "transferable_rule": "保留用真实动作或场景证明卖点的结构。",
+            "non_transferable": "不复制样例的具体动作、人物和场景，只迁移证明方式。",
+            "packaging_intent": "用说明字幕补足动作含义，必要时加过程标签。",
+        },
+        "cta": {
+            "role": "推动转化",
+            "method": "利益收束 + 行动指令",
+            "intent": "让观众知道下一步该做什么",
+            "rhythm": "结尾短暂停留，保证行动信息可读",
+            "transferable_rule": "保留明确行动词和最后记忆点，但替换成新内容的转化目标。",
+            "non_transferable": "不复制样例的具体口令、地址或优惠细节。",
+            "packaging_intent": "用结尾标题卡片、行动按钮感字幕和停留画面强化 CTA。",
+        },
+    }
+    return profiles.get(
+        slot_id,
+        {
+            "role": "结构承接",
+            "method": "信息承接",
+            "intent": "让内容保持连贯",
+            "rhythm": "跟随上下文节奏",
+            "transferable_rule": "保留结构目的，替换具体内容。",
+            "non_transferable": "不复制样例具体表达。",
+            "packaging_intent": "用字幕和卡片辅助理解。",
+        },
+    )
+
+
+def _target_adaptation_for_slot(slot: StructureSlot, content: NewContentInput, target_message: str) -> str:
+    product = content.product_name or content.topic
+    return f"把样例的“{slot.method}”迁移到 {product}：{target_message}"
+
+
+def _transfer_reasoning_for_slot(slot: StructureSlot) -> str:
+    return f"{slot.label} 只迁移方法：{slot.transferable_rule}{slot.non_transferable}"
 
 
 def _variant_packaging_notes(variant: str) -> list[str]:

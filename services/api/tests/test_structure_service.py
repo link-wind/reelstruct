@@ -159,6 +159,61 @@ def test_build_structure_preview_returns_sample_analysis_summary():
     assert beat_lookup["cta"] == "最后引导现在下单"
 
 
+def test_build_structure_preview_explains_transferable_slot_methods():
+    response = build_structure_preview(
+        sample=SampleVideoInput(
+            title="咖啡拉花样例",
+            duration=20,
+            shot_count=6,
+            transcript_summary="先用拉花特写吸引注意。再展示手作过程和门店氛围。最后引导到店打卡。",
+        ),
+        content=NewContentInput(
+            topic="精品咖啡店开业短视频",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+    )
+
+    hook = response.template.script_pattern[0]
+
+    assert hook.role == "吸引注意"
+    assert hook.method == "结果先行 + 视觉记忆点"
+    assert hook.intent == "让观众在前几秒理解为什么值得继续看"
+    assert hook.rhythm == "前段快进入，字幕和画面同时给出主信息"
+    assert "保留" in hook.transferable_rule
+    assert "不复制" in hook.non_transferable
+    assert "标题" in hook.packaging_intent
+
+
+def test_build_structure_preview_explains_mapping_reasoning_and_support():
+    response = build_structure_preview(
+        sample=SampleVideoInput(
+            title="咖啡拉花样例",
+            duration=20,
+            shot_count=6,
+            transcript_summary="先用拉花特写吸引注意。再展示手作过程和门店氛围。最后引导到店打卡。",
+        ),
+        content=NewContentInput(
+            topic="精品咖啡店开业短视频",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+    )
+
+    mapping_lookup = {item.slot_id: item for item in response.transfer_plan.mappings}
+    hook_mapping = mapping_lookup["hook"]
+    selling_mapping = mapping_lookup["selling_points"]
+
+    assert hook_mapping.source_method == "结果先行 + 视觉记忆点"
+    assert "巷口手作咖啡" in hook_mapping.target_adaptation
+    assert "只迁移方法" in hook_mapping.reasoning
+    assert hook_mapping.asset_requirement == "开头吸引镜头"
+    assert "标题" in hook_mapping.packaging_plan
+    assert "卡片" in selling_mapping.fallback_strategy
+
+
 def test_build_structure_preview_applies_slot_level_overrides():
     response = build_structure_preview(
         sample=SampleVideoInput(

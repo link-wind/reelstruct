@@ -46,6 +46,13 @@ class StructureSlot(BaseModel):
     purpose: str
     required_asset: str
     sample_evidence: str
+    role: str = ""
+    method: str = ""
+    intent: str = ""
+    rhythm: str = ""
+    transferable_rule: str = ""
+    non_transferable: str = ""
+    packaging_intent: str = ""
 
 
 class SampleAnalysisMetric(BaseModel):
@@ -90,6 +97,12 @@ class TransferMapping(BaseModel):
     source_label: str
     target_message: str
     asset_strategy: str
+    source_method: str = ""
+    target_adaptation: str = ""
+    reasoning: str = ""
+    asset_requirement: str = ""
+    packaging_plan: str = ""
+    fallback_strategy: str = ""
 
 
 class TransferMappingOverride(BaseModel):

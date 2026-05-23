@@ -8,7 +8,15 @@
         "start": 0,
         "duration": 3,
         "purpose": "开头制造注意力，快速给出痛点或结果承诺。",
-        "requiredAsset": "开头吸引镜头"
+        "requiredAsset": "开头吸引镜头",
+        "sampleEvidence": "先讲熬夜脸很垮",
+        "role": "吸引注意",
+        "method": "结果先行 + 视觉记忆点",
+        "intent": "让观众在前几秒理解为什么值得继续看",
+        "rhythm": "前段快进入，字幕和画面同时给出主信息",
+        "transferableRule": "保留先给结果或反差画面、再补一句利益承诺的创作方法。",
+        "nonTransferable": "不复制样例中的具体商品、门店名、画面内容和原始文案。",
+        "packagingIntent": "用大标题、强字幕或开场卡片强化停留。"
       },
       {
         "id": "selling_points",
@@ -16,7 +24,15 @@
         "start": 3,
         "duration": 13,
         "purpose": "连续推进核心卖点，保持信息密度。",
-        "requiredAsset": "商品特写镜头"
+        "requiredAsset": "商品特写镜头",
+        "sampleEvidence": "样例中段通过 9 个镜头维持节奏。",
+        "role": "建立兴趣",
+        "method": "利益点连续推进",
+        "intent": "让观众快速知道新内容的核心价值",
+        "rhythm": "信息密集，一镜一卖点，避免长停顿",
+        "transferableRule": "保留按优先级连续展开卖点的结构，不照搬原样例卖点。",
+        "nonTransferable": "不复制样例的具体优惠、价格、品牌描述。",
+        "packagingIntent": "用卖点卡片、关键词高亮和短字幕提高信息密度。"
       }
     ],
     "rhythmSummary": "约 9 个镜头 / 30 秒，开头快、中段密集、结尾收束。",
@@ -25,6 +41,32 @@
   "transferPlan": {
     "title": "清透保湿精华 结构迁移方案",
     "targetTopic": "新品保湿精华短视频",
+    "mappings": [
+      {
+        "slotId": "hook",
+        "sourceLabel": "Hook",
+        "targetMessage": "用 3 秒说明：为什么现在需要清透保湿精华",
+        "assetStrategy": "使用已有素材：开头吸引镜头",
+        "sourceMethod": "结果先行 + 视觉记忆点",
+        "targetAdaptation": "把样例的“结果先行 + 视觉记忆点”迁移到清透保湿精华：用 3 秒说明：为什么现在需要清透保湿精华",
+        "reasoning": "Hook 只迁移方法：保留先给结果或反差画面、再补一句利益承诺的创作方法。不复制样例中的具体商品、门店名、画面内容和原始文案。",
+        "assetRequirement": "开头吸引镜头",
+        "packagingPlan": "用大标题、强字幕或开场卡片强化停留。",
+        "fallbackStrategy": "使用已有素材：开头吸引镜头"
+      },
+      {
+        "slotId": "selling_points",
+        "sourceLabel": "卖点展开",
+        "targetMessage": "突出 快速补水，再补充 清爽不黏",
+        "assetStrategy": "使用卖点卡片 + 局部放大补足商品特写",
+        "sourceMethod": "利益点连续推进",
+        "targetAdaptation": "把样例的“利益点连续推进”迁移到清透保湿精华：突出 快速补水，再补充 清爽不黏",
+        "reasoning": "卖点展开 只迁移方法：保留按优先级连续展开卖点的结构，不照搬原样例卖点。不复制样例的具体优惠、价格、品牌描述。",
+        "assetRequirement": "商品特写镜头",
+        "packagingPlan": "用卖点卡片、关键词高亮和短字幕提高信息密度。",
+        "fallbackStrategy": "使用卖点卡片 + 局部放大补足商品特写"
+      }
+    ],
     "gaps": [
       {
         "slotId": "selling_points",
@@ -44,7 +86,7 @@
         "type": "video",
         "start": 0,
         "duration": 3,
-        "source": "hook.mp4",
+        "source": "Hook 开头吸引镜头 结果先行",
         "slotId": "hook"
       },
       {

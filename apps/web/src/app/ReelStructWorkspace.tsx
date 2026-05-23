@@ -10,6 +10,13 @@ type StructureSlot = {
   purpose: string
   required_asset: string
   sample_evidence: string
+  role: string
+  method: string
+  intent: string
+  rhythm: string
+  transferable_rule: string
+  non_transferable: string
+  packaging_intent: string
 }
 
 type MaterialGap = {
@@ -47,6 +54,12 @@ type TransferMapping = {
   source_label: string
   target_message: string
   asset_strategy: string
+  source_method: string
+  target_adaptation: string
+  reasoning: string
+  asset_requirement: string
+  packaging_plan: string
+  fallback_strategy: string
 }
 
 type CompositionTrack = {
@@ -1456,6 +1469,36 @@ export default function ReelStructWorkspace() {
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-3">
+                    <div className="rounded-md border border-line bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">样例方法</p>
+                      <div className="mt-3 grid gap-2 text-sm leading-6 text-slate-700">
+                        <p><strong className="text-ink">结构角色：</strong>{slot.role || slot.purpose}</p>
+                        <p><strong className="text-ink">爆款手法：</strong>{slot.method || mapping?.source_method || '等待拆解'}</p>
+                        <p><strong className="text-ink">节奏意图：</strong>{slot.rhythm || '等待拆解'}</p>
+                        <p><strong className="text-ink">可迁移规则：</strong>{slot.transferable_rule || mapping?.reasoning || '等待拆解'}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-line bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">新内容迁移</p>
+                      <div className="mt-3 grid gap-2 text-sm leading-6 text-slate-700">
+                        <p><strong className="text-ink">迁移结果：</strong>{mapping?.target_adaptation || draft.target_message}</p>
+                        <p><strong className="text-ink">迁移理由：</strong>{mapping?.reasoning || slot.intent || '等待生成'}</p>
+                        <p><strong className="text-ink">不可复制：</strong>{slot.non_transferable || '只迁移方法，不复制样例内容。'}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-line bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">素材/包装支撑</p>
+                      <div className="mt-3 grid gap-2 text-sm leading-6 text-slate-700">
+                        <p><strong className="text-ink">素材要求：</strong>{mapping?.asset_requirement || slot.required_asset}</p>
+                        <p><strong className="text-ink">包装计划：</strong>{mapping?.packaging_plan || slot.packaging_intent || '字幕和卡片辅助表达'}</p>
+                        <p><strong className="text-ink">缺口策略：</strong>{mapping?.fallback_strategy || draft.asset_strategy}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-3">
                     <label className="grid gap-2 text-sm font-medium text-slate-700">
                       样例依据
                       <textarea
@@ -2572,6 +2615,13 @@ const fallbackSlots: StructureSlot[] = [
     purpose: '痛点开场 + 快切镜头',
     required_asset: '开头吸引镜头',
     sample_evidence: '等待后端结构预览',
+    role: '吸引注意',
+    method: '结果先行 + 视觉记忆点',
+    intent: '让观众快速知道为什么要继续看',
+    rhythm: '前段快进入',
+    transferable_rule: '保留先给结果再解释价值的结构',
+    non_transferable: '不复制样例具体内容',
+    packaging_intent: '大标题和强字幕强化停留',
   },
   {
     id: 'selling_points',
@@ -2581,6 +2631,13 @@ const fallbackSlots: StructureSlot[] = [
     purpose: '缺少商品特写，使用卖点卡片补足',
     required_asset: '商品特写镜头',
     sample_evidence: '等待后端结构预览',
+    role: '建立兴趣',
+    method: '利益点连续推进',
+    intent: '让观众理解核心卖点',
+    rhythm: '中段信息密集',
+    transferable_rule: '保留一镜一卖点的展开方式',
+    non_transferable: '不复制样例具体卖点',
+    packaging_intent: '卖点卡片和关键词高亮',
   },
   {
     id: 'usage',
@@ -2590,6 +2647,13 @@ const fallbackSlots: StructureSlot[] = [
     purpose: '复用场景素材 + 字幕解释',
     required_asset: '使用过程镜头',
     sample_evidence: '等待后端结构预览',
+    role: '场景证明',
+    method: '真实场景证明',
+    intent: '让卖点落到可感知场景',
+    rhythm: '中后段放慢半拍',
+    transferable_rule: '保留用场景证明卖点的结构',
+    non_transferable: '不复制样例具体动作和人物',
+    packaging_intent: '说明字幕补足动作含义',
   },
   {
     id: 'cta',
@@ -2599,6 +2663,13 @@ const fallbackSlots: StructureSlot[] = [
     purpose: '结尾行动号召和封面文案',
     required_asset: '结尾 CTA 镜头',
     sample_evidence: '等待后端结构预览',
+    role: '推动转化',
+    method: '利益收束 + 行动指令',
+    intent: '让观众知道下一步动作',
+    rhythm: '结尾短暂停留',
+    transferable_rule: '保留明确行动词和最后记忆点',
+    non_transferable: '不复制样例具体口令和优惠',
+    packaging_intent: '结尾标题卡片强化 CTA',
   },
 ]
 

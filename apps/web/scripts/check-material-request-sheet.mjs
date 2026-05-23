@@ -58,6 +58,12 @@ try {
   if (!bodyTextAfterBatchRun.includes("批次工作台")) {
     throw new Error("missing batch workspace panel");
   }
+  if (!bodyTextAfterBatchRun.includes("样例方法") || !bodyTextAfterBatchRun.includes("新内容迁移") || !bodyTextAfterBatchRun.includes("素材/包装支撑")) {
+    throw new Error("missing explainable structure migration columns");
+  }
+  if (!bodyTextAfterBatchRun.includes("可迁移规则") || !bodyTextAfterBatchRun.includes("迁移理由")) {
+    throw new Error("missing transfer reasoning details");
+  }
 
   await page.getByRole("button", { name: "全选缺口" }).click();
   await page.getByRole("button", { name: "加入需求单" }).click();
