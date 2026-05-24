@@ -83,6 +83,30 @@ def test_build_render_clips_from_composition_uses_video_tracks(tmp_path):
     assert Path(clips[0].local_path).exists()
 
 
+def test_build_render_clips_from_composition_uses_fallback_fixture_when_keywords_do_not_match(tmp_path):
+    write_fixture_library(tmp_path)
+    composition = CompositionSpec(
+        duration=6,
+        tracks=[
+            CompositionTrack(type="video", start=0, duration=3, source="空气炸锅 少油 快手 清洁", slot_id="hook"),
+            CompositionTrack(type="caption", start=0.5, duration=2, text="少油也能酥脆", slot_id="hook"),
+        ],
+    )
+
+    clips = build_render_clips_from_composition(
+        composition,
+        fixture_root=tmp_path,
+        output_dir=tmp_path / "downloads",
+    )
+
+    assert len(clips) == 1
+    assert clips[0].scene_id == "hook"
+    assert clips[0].caption == "少油也能酥脆"
+    assert clips[0].source_type == "fixture_fallback"
+    assert clips[0].source_label == "fixture 兜底：咖啡拉花特写"
+    assert Path(clips[0].local_path).exists()
+
+
 def test_build_render_clips_from_composition_merges_caption_and_card_text(tmp_path):
     write_fixture_library(tmp_path)
     composition = CompositionSpec(

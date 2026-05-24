@@ -1,5 +1,5 @@
-import ReelStructWorkspace from './ReelStructWorkspace'
+import MainApp from '../components/MainApp'
 
 export default function Home() {
-  return <ReelStructWorkspace />
+  return <MainApp />
 }

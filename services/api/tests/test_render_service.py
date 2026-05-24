@@ -1,13 +1,36 @@
 from pathlib import Path
 
 from app.fixture_asset_service import RenderClip
+from app.models import MaterialFitAnalysis
 from app.render_service import build_render_plan, build_video_filter, render_demo_video
+
+
+def make_render_clip(
+    *,
+    scene_id: str,
+    local_path: str,
+    public_url: str,
+    caption: str,
+    start_time: float,
+    duration: float,
+) -> RenderClip:
+    return RenderClip(
+        scene_id=scene_id,
+        local_path=local_path,
+        public_url=public_url,
+        caption=caption,
+        start_time=start_time,
+        duration=duration,
+        source_type="fixture",
+        source_label="test fixture",
+        material_analysis=MaterialFitAnalysis(),
+    )
 
 
 def test_build_render_plan_uses_reelstruct_output_contract(tmp_path):
     clip_path = tmp_path / "clip.mp4"
     clip_path.write_bytes(b"placeholder")
-    clip = RenderClip(
+    clip = make_render_clip(
         scene_id="hook",
         local_path=str(clip_path),
         public_url="/downloads/hook.mp4",
@@ -50,7 +73,7 @@ def test_render_demo_video_creates_mp4_from_fixture_clip(tmp_path):
     source = tmp_path / "source.mp4"
     output_dir = tmp_path / "output"
     create_tiny_video(source)
-    clip = RenderClip(
+    clip = make_render_clip(
         scene_id="hook",
         local_path=str(source),
         public_url="/downloads/source.mp4",

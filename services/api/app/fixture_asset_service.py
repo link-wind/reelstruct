@@ -124,13 +124,16 @@ def build_render_clips_from_composition(
 
         keywords = _normalize_keywords([track.source, track.slot_id])
         candidates = search_fixture_assets(keywords, fixture_root=fixture_root, max_results=1)
-        if not candidates:
+        candidate = candidates[0] if candidates else find_fallback_fixture_asset(fixture_root=fixture_root)
+        if candidate is None:
             continue
         copied = copy_fixture_asset(
-            candidates[0],
+            candidate,
             output_dir=output_dir,
             output_name=f"{track.slot_id or index}.mp4",
         )
+        source_type = copied.source_type if candidates else "fixture_fallback"
+        source_label = copied.source_label if candidates else f"fixture 兜底：{candidate.title}"
         clips.append(
             RenderClip(
                 scene_id=track.slot_id,
@@ -139,12 +142,30 @@ def build_render_clips_from_composition(
                 caption=caption_lookup.get(track.slot_id, ""),
                 start_time=track.start,
                 duration=track.duration,
-                source_type=copied.source_type,
-                source_label=copied.source_label,
+                source_type=source_type,
+                source_label=source_label,
                 material_analysis=copied.material_analysis,
             )
         )
     return clips
+
+
+def find_fallback_fixture_asset(*, fixture_root: Optional[Path] = None) -> Optional[FixtureAssetCandidate]:
+    root = fixture_root or DEFAULT_FIXTURE_ROOT
+    for entry in _load_fixture_library(root):
+        public_url = str(entry.get("videoUrl") or "")
+        local_path = _resolve_fixture_path(root, public_url)
+        if not local_path.is_file():
+            continue
+        return FixtureAssetCandidate(
+            id=str(entry.get("id") or ""),
+            title=str(entry.get("title") or ""),
+            duration=float(entry.get("duration") or 0),
+            local_path=str(local_path),
+            public_url=public_url,
+            matched_keywords=[],
+        )
+    return None
 
 
 def _caption_lookup_with_packaging(composition: CompositionSpec) -> dict[str, str]:

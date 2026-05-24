@@ -61,6 +61,23 @@ def test_upload_transcript_file_returns_clean_summary():
     assert "最后引导现在下单。" in body["transcript_summary"]
 
 
+def test_upload_sample_video_returns_400_when_parser_raises_runtime_error(monkeypatch):
+    client = TestClient(app, raise_server_exceptions=False)
+
+    def fake_save_sample_upload(*args, **kwargs):
+        raise RuntimeError("ffmpeg parser crashed")
+
+    monkeypatch.setattr("app.main.save_sample_upload", fake_save_sample_upload)
+
+    response = client.post(
+        "/api/samples/upload",
+        files={"file": ("sample.mp4", b"video bytes", "video/mp4")},
+    )
+
+    assert response.status_code == 400
+    assert "视频解析失败" in response.json()["detail"]
+
+
 def create_tiny_video_bytes() -> bytes:
     from pathlib import Path
     import subprocess

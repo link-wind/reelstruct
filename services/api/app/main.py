@@ -3,6 +3,7 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.environment import load_api_env
@@ -61,6 +62,15 @@ from app.video_understanding.pipeline import build_ai_or_fallback_structure_temp
 
 load_api_env()
 app = FastAPI(title="ReelStruct API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 DOWNLOADS_DIR = STORAGE_DIR / "downloads"
 OUTPUT_DIR = STORAGE_DIR / "output"
@@ -310,7 +320,7 @@ def delete_template(template_id: str) -> Response:
 def upload_sample_video(file: UploadFile) -> SampleUploadResponse:
     try:
         return save_sample_upload(file, sample_dir=SAMPLES_DIR, keyframes_dir=KEYFRAMES_DIR)
-    except ValueError as exc:
+    except (ValueError, RuntimeError, OSError) as exc:
         detail = "视频解析失败，请确认上传有效视频文件。"
         if str(exc):
             detail = f"{detail} {str(exc)}"
