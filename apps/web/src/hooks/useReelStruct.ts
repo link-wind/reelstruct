@@ -134,6 +134,7 @@ type StructurePreviewResponse = {
     duration: number
     tracks: CompositionTrack[]
   }
+  shot_evidence_graph?: ShotEvidenceGraph
 }
 
 type RenderDemoResponse = {
@@ -275,6 +276,49 @@ type VideoShot = {
   keyframe_time: number
 }
 
+type FrameEvidence = {
+  shot_index: number
+  frame_index: number
+  time: number
+  role: 'start' | 'middle' | 'safe_end' | 'end' | 'third' | 'two_thirds'
+  public_url: string
+}
+
+type ShotUnderstanding = {
+  shot_index: number
+  visual_summary: string
+  text_summary: string
+  subject: string
+  scene: string
+  action: string
+  packaging_signals: string[]
+  creative_function_hint: string
+  confidence: number
+  warnings: string[]
+}
+
+type ShotEvidenceNode = {
+  shot: VideoShot
+  frames: FrameEvidence[]
+  understanding: ShotUnderstanding
+}
+
+type ShotRelation = {
+  from_shot: number
+  to_shot: number
+  relation_type: string
+  relation_summary: string
+  rhythm_change: string
+  semantic_shift: string
+  confidence: number
+}
+
+type ShotEvidenceGraph = {
+  shots: ShotEvidenceNode[]
+  relations: ShotRelation[]
+  warnings: string[]
+}
+
 type VideoSignal = {
   metadata: {
     duration: number
@@ -284,7 +328,7 @@ type VideoSignal = {
     format_name: string
   }
   shot_count: number
-  detection_method: 'scene_detect' | 'uniform_fallback'
+  detection_method: 'scene_detect' | 'pyscenedetect_adaptive' | 'pyscenedetect_content' | 'ffmpeg_scene_detect' | 'uniform_fallback'
   shots: VideoShot[]
   rhythm_metrics: {
     avg_shot_duration: number
