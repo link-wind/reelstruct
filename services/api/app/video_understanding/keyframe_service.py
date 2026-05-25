@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def frame_sample_times(*, start: float, end: float) -> list[tuple[str, float]]:
-    duration = round(end - start, 3)
+    duration = end - start
     if duration < 0.8:
         return [("middle", round(start + duration / 2, 3))]
     if duration < 2.0:

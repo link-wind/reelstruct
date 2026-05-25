@@ -76,6 +76,10 @@ def test_frame_sample_times_uses_one_middle_frame_for_very_short_shot():
     assert frame_sample_times(start=0.0, end=0.6) == [("middle", 0.3)]
 
 
+def test_frame_sample_times_keeps_raw_duration_boundary_in_very_short_bucket():
+    assert frame_sample_times(start=0.0, end=0.7996) == [("middle", 0.4)]
+
+
 def test_frame_sample_times_uses_middle_and_safe_end_for_short_shot():
     assert frame_sample_times(start=0.0, end=1.5) == [
         ("middle", 0.75),
