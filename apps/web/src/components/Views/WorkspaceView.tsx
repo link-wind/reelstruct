@@ -200,19 +200,22 @@ export default function WorkspaceView({ taskText, reelStruct }: WorkspaceViewPro
     const mappingLookup = new Map(preview.transfer_plan.mappings.map((mapping) => [mapping.slot_id, mapping]))
     return preview.template.script_pattern.map((slot) => {
       const mapping = mappingLookup.get(slot.id)
+      const explanation = mapping?.explanation
       return {
         slotId: slot.id,
         label: slot.label,
         sampleEvidence: slot.sample_evidence,
-        sourceMethod: mapping?.source_method || slot.method,
-        transferableRule: slot.transferable_rule,
+        sourceMethod: explanation?.source_observation || mapping?.source_method || slot.method,
+        transferableRule: explanation?.transferable_principle || slot.transferable_rule,
         targetMessage: mapping?.target_message || '',
-        targetAdaptation: mapping?.target_adaptation || '',
-        reasoning: mapping?.reasoning || '',
+        targetAdaptation: explanation?.target_expression || mapping?.target_adaptation || '',
+        reasoning: explanation?.reasoning || mapping?.reasoning || '',
         assetRequirement: mapping?.asset_requirement || slot.required_asset,
-        assetStrategy: mapping?.asset_strategy || '',
+        assetStrategy: explanation?.asset_plan || mapping?.asset_strategy || '',
         packagingPlan: mapping?.packaging_plan || slot.packaging_intent,
-        fallbackStrategy: mapping?.fallback_strategy || '',
+        fallbackStrategy: explanation?.gap_handling || mapping?.fallback_strategy || '',
+        confidence: explanation?.confidence || 0,
+        warnings: explanation?.warnings || [],
       }
     })
   }, [preview])

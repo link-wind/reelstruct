@@ -19,6 +19,10 @@ from app.models import (
     TransferPlan,
     UserSlotAsset,
 )
+from app.video_understanding.transfer_explainer_service import (
+    build_fallback_transfer_explanation,
+    explain_transfer_with_ai,
+)
 
 
 def build_structure_preview(
@@ -29,6 +33,7 @@ def build_structure_preview(
     mapping_overrides: Optional[list[TransferMappingOverride]] = None,
     material_request_sheet: Optional[list[MaterialRequestTask]] = None,
     variant: str = "standard",
+    use_ai_transfer_explanation: bool = False,
 ) -> StructurePreviewResponse:
     selected_template = template_override or ai_template
     template = selected_template.model_copy(deep=True) if selected_template is not None else extract_template_structure(sample)
@@ -45,6 +50,14 @@ def build_structure_preview(
         mapping_overrides=mapping_overrides,
         material_request_sheet=material_request_sheet,
     )
+    if use_ai_transfer_explanation:
+        transfer_plan = explain_transfer_with_ai(
+            template=template,
+            content=effective_content,
+            transfer_plan=transfer_plan,
+            graph=getattr(template, "shot_evidence_graph", None),
+            variant=variant,
+        )
     composition = build_composition_spec(template, transfer_plan, effective_content)
     return StructurePreviewResponse(
         template=template,
@@ -210,19 +223,29 @@ def build_transfer_plan(
         )
         asset_strategy = build_asset_strategy(slot, gap_lookup.get(slot.id), override)
         packaging = _packaging_plan_for_slot(slot, content, target_message, variant)
+        mapping = TransferMapping(
+            slot_id=slot.id,
+            source_label=slot.label,
+            target_message=target_message,
+            asset_strategy=asset_strategy,
+            source_method=slot.method,
+            target_adaptation=_target_adaptation_for_slot(slot, content, target_message),
+            reasoning=_transfer_reasoning_for_slot(slot),
+            asset_requirement=slot.required_asset,
+            packaging_plan=_packaging_plan_summary(packaging, slot.packaging_intent),
+            packaging=packaging,
+            fallback_strategy=gap_lookup.get(slot.id).fill_strategy if gap_lookup.get(slot.id) else asset_strategy,
+        )
         mappings.append(
-            TransferMapping(
-                slot_id=slot.id,
-                source_label=slot.label,
-                target_message=target_message,
-                asset_strategy=asset_strategy,
-                source_method=slot.method,
-                target_adaptation=_target_adaptation_for_slot(slot, content, target_message),
-                reasoning=_transfer_reasoning_for_slot(slot),
-                asset_requirement=slot.required_asset,
-                packaging_plan=_packaging_plan_summary(packaging, slot.packaging_intent),
-                packaging=packaging,
-                fallback_strategy=gap_lookup.get(slot.id).fill_strategy if gap_lookup.get(slot.id) else asset_strategy,
+            mapping.model_copy(
+                update={
+                    "explanation": build_fallback_transfer_explanation(
+                        mapping=mapping,
+                        source_observation=slot.method or slot.sample_evidence,
+                        transferable_principle=slot.transferable_rule,
+                        gap_handling=gap_lookup.get(slot.id).fill_strategy if gap_lookup.get(slot.id) else "",
+                    )
+                }
             )
         )
 

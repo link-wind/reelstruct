@@ -47,6 +47,7 @@ def create_demo_run(
         mapping_overrides=request.mapping_overrides,
         material_request_sheet=request.material_request_sheet,
         variant=request.variant,
+        use_ai_transfer_explanation=request.use_ai_transfer_explanation,
     )
     trace.append(
         RunTraceEvent(

@@ -111,6 +111,7 @@ def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePre
         mapping_overrides=request.mapping_overrides,
         material_request_sheet=request.material_request_sheet,
         variant=request.variant,
+        use_ai_transfer_explanation=request.use_ai_transfer_explanation,
     )
 
 
@@ -128,6 +129,7 @@ def compare_structure_variants(request: StructurePreviewRequest) -> StructureVar
             mapping_overrides=request.mapping_overrides,
             material_request_sheet=request.material_request_sheet,
             variant=variant,
+            use_ai_transfer_explanation=request.use_ai_transfer_explanation,
         )
         mapping_lookup = {item.slot_id: item for item in preview.transfer_plan.mappings}
         variants.append(

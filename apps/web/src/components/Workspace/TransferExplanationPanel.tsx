@@ -13,6 +13,8 @@ export interface TransferExplanationViewModel {
   assetStrategy: string
   packagingPlan: string
   fallbackStrategy: string
+  confidence: number
+  warnings: string[]
 }
 
 export default function TransferExplanationPanel({ explanations }: { explanations: TransferExplanationViewModel[] }) {
@@ -51,6 +53,13 @@ export default function TransferExplanationPanel({ explanations }: { explanation
               <div className="transfer-reason">
                 <strong>迁移理由</strong>
                 <p>{item.reasoning || item.transferableRule || item.fallbackStrategy || '等待生成迁移解释。'}</p>
+              </div>
+              <div className="transfer-reason">
+                <strong>可信度</strong>
+                <p>
+                  {item.confidence ? `${Math.round(item.confidence * 100)}%` : '规则兜底'}
+                  {item.warnings.length ? ` / ${item.warnings.join('；')}` : ''}
+                </p>
               </div>
             </section>
           ))}

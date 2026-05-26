@@ -70,6 +70,18 @@ type PackagingPlan = {
   cover_hint: string
 }
 
+type TransferExplanation = {
+  slot_id: string
+  source_observation: string
+  transferable_principle: string
+  target_expression: string
+  asset_plan: string
+  gap_handling: string
+  reasoning: string
+  confidence: number
+  warnings: string[]
+}
+
 type TransferMapping = {
   slot_id: string
   source_label: string
@@ -82,6 +94,7 @@ type TransferMapping = {
   packaging_plan: string
   packaging: PackagingPlan
   fallback_strategy: string
+  explanation?: TransferExplanation
 }
 
 type CompositionTrack = {
@@ -694,6 +707,7 @@ export function useReelStruct() {
           content,
           sample_local_path: sampleUpload?.local_path || '',
           use_ai_structure: true,
+          use_ai_transfer_explanation: true,
           template_id: selectedTemplateId,
           variant: outputVariant,
           mapping_overrides,
@@ -728,6 +742,7 @@ export function useReelStruct() {
           content,
           sample_local_path: sampleUpload?.local_path || '',
           use_ai_structure: true,
+          use_ai_transfer_explanation: true,
           template_id: selectedTemplateId,
           variant: outputVariant,
           mapping_overrides,
@@ -759,6 +774,7 @@ export function useReelStruct() {
           content,
           sample_local_path: sampleUpload?.local_path || '',
           use_ai_structure: true,
+          use_ai_transfer_explanation: true,
           template_id: selectedTemplateId,
           mapping_overrides: preview ? buildMappingOverrides(preview, slotDrafts) : [],
           material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),

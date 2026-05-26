@@ -122,6 +122,18 @@ class PackagingPlan(BaseModel):
     cover_hint: str = ""
 
 
+class TransferExplanation(BaseModel):
+    slot_id: str = ""
+    source_observation: str = ""
+    transferable_principle: str = ""
+    target_expression: str = ""
+    asset_plan: str = ""
+    gap_handling: str = ""
+    reasoning: str = ""
+    confidence: float = Field(default=0, ge=0, le=1)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class TransferMapping(BaseModel):
     slot_id: str
     source_label: str
@@ -134,6 +146,7 @@ class TransferMapping(BaseModel):
     packaging_plan: str = ""
     packaging: PackagingPlan = Field(default_factory=PackagingPlan)
     fallback_strategy: str = ""
+    explanation: TransferExplanation = Field(default_factory=TransferExplanation)
 
 
 class TransferMappingOverride(BaseModel):
@@ -317,6 +330,7 @@ class StructurePreviewRequest(BaseModel):
     use_ai_structure: bool = True
     template_id: str = ""
     variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"] = "standard"
+    use_ai_transfer_explanation: bool = False
     mapping_overrides: list[TransferMappingOverride] = Field(default_factory=list)
     material_request_sheet: list[MaterialRequestTask] = Field(default_factory=list)
 
