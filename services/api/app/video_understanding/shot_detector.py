@@ -3,6 +3,7 @@ import re
 import subprocess
 
 from app.video_understanding.media_probe import probe_video_metadata
+from app.video_understanding.pyscenedetect_detector import detect_shots_with_pyscenedetect
 from app.video_understanding.schemas import RhythmMetrics, VideoShot, VideoSignal
 
 FFMPEG_TIMEOUT_SECONDS = 20
@@ -22,14 +23,21 @@ def detect_video_signal(
         raise ValueError(f"fallback_seconds must be greater than 0, got {fallback_seconds}")
 
     metadata = probe_video_metadata(path)
-    cuts = _detect_scene_cut_times(path, metadata.duration, threshold)
+    shots = _try_pyscenedetect(path, "adaptive", metadata.duration)
+    detection_method = "pyscenedetect_adaptive"
 
-    if len(cuts) < 1 and metadata.duration > fallback_seconds * 2:
+    if not _is_usable_shot_list(shots, metadata.duration):
+        shots = _try_pyscenedetect(path, "content", metadata.duration)
+        detection_method = "pyscenedetect_content"
+
+    if not _is_usable_shot_list(shots, metadata.duration):
+        cuts = _detect_scene_cut_times(path, metadata.duration, threshold)
+        shots = normalize_shots(_shots_from_cuts(metadata.duration, cuts), metadata.duration)
+        detection_method = "ffmpeg_scene_detect"
+
+    if not _is_usable_shot_list(shots, metadata.duration) and metadata.duration > fallback_seconds * 2:
         shots = _build_uniform_shots(metadata.duration, fallback_seconds)
         detection_method = "uniform_fallback"
-    else:
-        shots = _shots_from_cuts(metadata.duration, cuts)
-        detection_method = "scene_detect"
 
     return VideoSignal(
         metadata=metadata,
@@ -38,6 +46,13 @@ def detect_video_signal(
         shots=shots,
         rhythm_metrics=_build_rhythm_metrics(shots),
     )
+
+
+def _try_pyscenedetect(path: Path, detector: str, duration: float) -> list[VideoShot]:
+    try:
+        return normalize_shots(detect_shots_with_pyscenedetect(path, detector=detector), duration)
+    except Exception:
+        return []
 
 
 def _detect_scene_cut_times(path: Path, duration: float, threshold: float) -> list[float]:
@@ -116,6 +131,36 @@ def _shots_from_boundaries(boundaries: list[float]) -> list[VideoShot]:
             )
         )
     return shots
+
+
+def normalize_shots(shots: list[VideoShot], duration: float, min_duration: float = 0.3) -> list[VideoShot]:
+    intervals: list[tuple[float, float]] = []
+    video_duration = round(max(duration, 0), 3)
+
+    for shot in shots:
+        start = round(min(max(shot.start, 0), video_duration), 3)
+        end = round(min(max(shot.end, 0), video_duration), 3)
+        shot_duration = round(end - start, 3)
+        if shot_duration <= 0:
+            continue
+        if intervals and shot_duration < min_duration:
+            prev_start, _prev_end = intervals[-1]
+            intervals[-1] = (prev_start, end)
+            continue
+        intervals.append((start, end))
+
+    return _shots_from_boundaries([intervals[0][0], *[end for _start, end in intervals]]) if intervals else []
+
+
+def _is_usable_shot_list(shots: list[VideoShot], duration: float) -> bool:
+    if not shots:
+        return False
+    if any(shot.duration < MIN_SHOT_DURATION_SECONDS for shot in shots):
+        return False
+    if duration > DEFAULT_FALLBACK_SECONDS * 2 and len(shots) < 2:
+        return False
+    max_reasonable_count = max(1, int(duration / MIN_SHOT_DURATION_SECONDS))
+    return len(shots) <= max_reasonable_count
 
 
 def _build_rhythm_metrics(shots: list[VideoShot]) -> RhythmMetrics:

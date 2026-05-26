@@ -75,7 +75,7 @@ try {
   if (!workspaceText.includes("目标内容")) {
     throw new Error("workspace target brief panel is missing");
   }
-  for (const tabLabel of ["样例解析", "结构拆解", "素材补全", "结果验证"]) {
+  for (const tabLabel of ["样例解析", "镜头证据", "结构拆解", "素材补全", "结果验证"]) {
     if (!workspaceText.includes(tabLabel)) {
       throw new Error(`workspace tab is missing: ${tabLabel}`);
     }
@@ -93,6 +93,14 @@ try {
   }
   if (!workspaceText.includes("样例解析概览")) {
     throw new Error("workspace sample analysis overview panel is missing");
+  }
+  if (!workspaceText.includes("镜头证据")) {
+    await page.getByRole("tab", { name: "打开镜头证据标签" }).click();
+    const evidenceTabText = await page.locator("body").innerText();
+    if (!evidenceTabText.includes("还没有镜头证据")) {
+      throw new Error("workspace shot evidence empty state is missing");
+    }
+    await page.getByRole("tab", { name: "打开样例解析标签" }).click();
   }
   if (!workspaceText.includes("上传样例后，这里会展示视频基础信息、节奏指标和关键帧证据")) {
     throw new Error("workspace sample analysis empty state is missing");
@@ -151,6 +159,12 @@ try {
   if (!uploadedWorkspaceText.includes("Shot ")) {
     throw new Error("workspace sample keyframes are missing after upload");
   }
+  await page.getByRole("tab", { name: "打开镜头证据标签" }).click();
+  const uploadedEvidenceText = await page.locator("body").innerText();
+  if (!uploadedEvidenceText.includes("镜头证据") || !uploadedEvidenceText.includes("Shot ")) {
+    throw new Error("workspace shot evidence tab is missing uploaded shot evidence");
+  }
+  await page.getByRole("tab", { name: "打开样例解析标签" }).click();
 
   await page.waitForTimeout(1500);
   let generatedWorkspaceText = "";

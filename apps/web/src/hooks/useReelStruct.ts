@@ -310,10 +310,54 @@ type ShotUnderstanding = {
   warnings: string[]
 }
 
+type FrameOCRText = {
+  shot_index: number
+  frame_index: number
+  frame_time: number
+  text: string
+  position: string
+  confidence: number
+}
+
+type ShotTextAlignment = {
+  shot_index: number
+  text: string
+  source_start: number
+  source_end: number
+  overlap_ratio: number
+}
+
 type ShotEvidenceNode = {
   shot: VideoShot
   frames: FrameEvidence[]
+  ocr_texts: FrameOCRText[]
+  transcript_texts: ShotTextAlignment[]
   understanding: ShotUnderstanding
+}
+
+type AnalysisUnitUnderstanding = {
+  unit_id: string
+  visual_summary: string
+  text_summary: string
+  subject: string
+  scene: string
+  action: string
+  packaging_signals: string[]
+  creative_function_hint: string
+  confidence: number
+  warnings: string[]
+}
+
+type AnalysisUnit = {
+  unit_id: string
+  shot_indices: number[]
+  start: number
+  end: number
+  duration: number
+  representative_frames: FrameEvidence[]
+  ocr_texts: FrameOCRText[]
+  transcript_texts: ShotTextAlignment[]
+  understanding: AnalysisUnitUnderstanding
 }
 
 type ShotRelation = {
@@ -326,8 +370,9 @@ type ShotRelation = {
   confidence: number
 }
 
-type ShotEvidenceGraph = {
+export type ShotEvidenceGraph = {
   shots: ShotEvidenceNode[]
+  analysis_units: AnalysisUnit[]
   relations: ShotRelation[]
   warnings: string[]
 }
@@ -461,6 +506,7 @@ export function useReelStruct() {
   const [sample, setSample] = useState<SampleVideoInput>(defaultSample)
   const [content, setContent] = useState<NewContentInput>(defaultContent)
   const [sampleUpload, setSampleUpload] = useState<SampleUploadResponse | null>(null)
+  const [manualEvidenceGraph, setManualEvidenceGraph] = useState<ShotEvidenceGraph | null>(null)
   const [transcriptUpload, setTranscriptUpload] = useState<TranscriptUploadResponse | null>(null)
   const [slotDrafts, setSlotDrafts] = useState<Record<string, SlotDraft>>({})
   const [selectedGapIds, setSelectedGapIds] = useState<string[]>([])
@@ -614,6 +660,7 @@ export function useReelStruct() {
       }
       const upload = normalizeSampleUpload((await response.json()) as SampleUploadResponse)
       setSampleUpload(upload)
+      setManualEvidenceGraph(null)
       setSample(upload.sample)
       setStatus('样例已上传')
     } catch (caught) {
@@ -688,6 +735,76 @@ export function useReelStruct() {
     }
   }
 
+  const generateOcrEvidence = async () => {
+    if (!sampleUpload?.video_signal) {
+      setError('请先上传样例视频')
+      return
+    }
+
+    setError('')
+    const shots = sampleUpload.video_signal.shots
+    if (!shots.length) {
+      setError('当前样例没有可识别的镜头')
+      return
+    }
+
+    setStatus(`正在生成 OCR 证据 0/${shots.length}`)
+    try {
+      for (const [shotPosition, shot] of shots.entries()) {
+        setStatus(`正在生成 OCR 证据 ${shotPosition + 1}/${shots.length}：Shot ${shot.index}`)
+        const graph = await requestJson<ShotEvidenceGraph>('/api/samples/evidence/ocr', {
+          method: 'POST',
+          body: {
+            sample_id: sampleUpload.sample_id,
+            sample_local_path: sampleUpload.local_path,
+            video_signal: sampleUpload.video_signal,
+            shot_indices: [shot.index],
+          },
+        })
+        setManualEvidenceGraph((current) => mergeShotEvidenceGraphs(current, graph))
+      }
+      setStatus(`OCR 证据已生成 ${shots.length}/${shots.length}`)
+    } catch (caught) {
+      setStatus('OCR 证据生成失败')
+      setError(caught instanceof Error ? caught.message : 'OCR 证据生成失败')
+    }
+  }
+
+  const generateAsrEvidence = async () => {
+    if (!sampleUpload?.video_signal) {
+      setError('请先上传样例视频')
+      return
+    }
+
+    setError('')
+    const shots = sampleUpload.video_signal.shots
+    if (!shots.length) {
+      setError('当前样例没有可识别的镜头')
+      return
+    }
+
+    setStatus(`正在生成 ASR 证据 0/${shots.length}`)
+    try {
+      for (const [shotPosition, shot] of shots.entries()) {
+        setStatus(`正在生成 ASR 证据 ${shotPosition + 1}/${shots.length}：Shot ${shot.index}`)
+        const graph = await requestJson<ShotEvidenceGraph>('/api/samples/evidence/asr', {
+          method: 'POST',
+          body: {
+            sample_id: sampleUpload.sample_id,
+            sample_local_path: sampleUpload.local_path,
+            video_signal: sampleUpload.video_signal,
+            shot_indices: [shot.index],
+          },
+        })
+        setManualEvidenceGraph((current) => mergeShotEvidenceGraphs(current, graph))
+      }
+      setStatus(`ASR 证据已生成 ${shots.length}/${shots.length}`)
+    } catch (caught) {
+      setStatus('ASR 证据生成失败')
+      setError(caught instanceof Error ? caught.message : 'ASR 证据生成失败')
+    }
+  }
+
   const runDemo = async (options?: { useDraftOverrides?: boolean }) => {
     setError('')
     setStatus('正在执行迁移任务')
@@ -708,6 +825,7 @@ export function useReelStruct() {
           sample_local_path: sampleUpload?.local_path || '',
           use_ai_structure: true,
           use_ai_transfer_explanation: true,
+          shot_evidence_graph: manualEvidenceGraph || undefined,
           template_id: selectedTemplateId,
           variant: outputVariant,
           mapping_overrides,
@@ -743,6 +861,7 @@ export function useReelStruct() {
           sample_local_path: sampleUpload?.local_path || '',
           use_ai_structure: true,
           use_ai_transfer_explanation: true,
+          shot_evidence_graph: manualEvidenceGraph || undefined,
           template_id: selectedTemplateId,
           variant: outputVariant,
           mapping_overrides,
@@ -775,6 +894,7 @@ export function useReelStruct() {
           sample_local_path: sampleUpload?.local_path || '',
           use_ai_structure: true,
           use_ai_transfer_explanation: true,
+          shot_evidence_graph: manualEvidenceGraph || undefined,
           template_id: selectedTemplateId,
           mapping_overrides: preview ? buildMappingOverrides(preview, slotDrafts) : [],
           material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
@@ -1249,6 +1369,8 @@ export function useReelStruct() {
     setContent,
     sampleUpload,
     setSampleUpload,
+    manualEvidenceGraph,
+    setManualEvidenceGraph,
     transcriptUpload,
     setTranscriptUpload,
     slotDrafts,
@@ -1313,6 +1435,8 @@ export function useReelStruct() {
     uploadSample,
     uploadTranscript,
     uploadMaterialAsset,
+    generateOcrEvidence,
+    generateAsrEvidence,
     runDemo,
     runDemoVariants,
     fetchRecentRuns,
@@ -1353,6 +1477,121 @@ function normalizeUserSlotAsset(asset: UserSlotAsset): UserSlotAsset {
     ...asset,
     public_url: mediaUrl(asset.public_url),
   }
+}
+
+export function mergeShotEvidenceGraphs(current: ShotEvidenceGraph | null, next: ShotEvidenceGraph): ShotEvidenceGraph {
+  if (!current) return normalizeShotEvidenceGraph(next)
+  const normalizedCurrent = normalizeShotEvidenceGraph(current)
+  const normalizedNext = normalizeShotEvidenceGraph(next)
+
+  const nextShotLookup = new Map(normalizedNext.shots.map((node) => [node.shot.index, node]))
+  const mergedShots = normalizedCurrent.shots.map((node) => {
+    const nextNode = nextShotLookup.get(node.shot.index)
+    if (!nextNode) return node
+    return {
+      ...node,
+      frames: mergeByKey(node.frames, nextNode.frames, (frame) => `${frame.shot_index}:${frame.frame_index}:${frame.time}`),
+      ocr_texts: mergeByKey(
+        node.ocr_texts,
+        nextNode.ocr_texts,
+        (item) => `${item.shot_index}:${item.frame_index}:${item.frame_time}:${item.text}`,
+      ),
+      transcript_texts: mergeByKey(
+        node.transcript_texts,
+        nextNode.transcript_texts,
+        (item) => `${item.shot_index}:${item.source_start}:${item.source_end}:${item.text}`,
+      ),
+      understanding: node.understanding || nextNode.understanding,
+    }
+  })
+  for (const nextNode of normalizedNext.shots) {
+    if (!normalizedCurrent.shots.some((node) => node.shot.index === nextNode.shot.index)) {
+      mergedShots.push(nextNode)
+    }
+  }
+
+  return {
+    ...normalizedCurrent,
+    shots: mergedShots,
+    analysis_units: mergeAnalysisUnits(normalizedCurrent.analysis_units, normalizedNext.analysis_units),
+    relations: normalizedCurrent.relations.length ? normalizedCurrent.relations : normalizedNext.relations,
+    warnings: mergeByKey(normalizedCurrent.warnings, normalizedNext.warnings, (warning) => warning),
+  }
+}
+
+function mergeAnalysisUnits(current: AnalysisUnit[], next: AnalysisUnit[]): AnalysisUnit[] {
+  const unitLookup = new Map(current.map((unit) => [analysisUnitMergeKey(unit), normalizeAnalysisUnit(unit)]))
+  for (const rawNextUnit of next) {
+    const nextUnit = normalizeAnalysisUnit(rawNextUnit)
+    const unitKey = analysisUnitMergeKey(nextUnit)
+    const currentUnit = unitLookup.get(unitKey)
+    if (!currentUnit) {
+      unitLookup.set(unitKey, nextUnit)
+      continue
+    }
+    unitLookup.set(unitKey, {
+      ...currentUnit,
+      unit_id: analysisUnitStableId(currentUnit),
+      representative_frames: mergeByKey(
+        currentUnit.representative_frames,
+        nextUnit.representative_frames,
+        (frame) => `${frame.shot_index}:${frame.frame_index}:${frame.time}`,
+      ),
+      ocr_texts: mergeByKey(
+        currentUnit.ocr_texts,
+        nextUnit.ocr_texts,
+        (item) => `${item.shot_index}:${item.frame_index}:${item.frame_time}:${item.text}`,
+      ),
+      transcript_texts: mergeByKey(
+        currentUnit.transcript_texts,
+        nextUnit.transcript_texts,
+        (item) => `${item.shot_index}:${item.source_start}:${item.source_end}:${item.text}`,
+      ),
+      understanding: currentUnit.understanding || nextUnit.understanding,
+    })
+  }
+
+  return [...unitLookup.values()].sort((left, right) => left.start - right.start)
+}
+
+function normalizeShotEvidenceGraph(graph: ShotEvidenceGraph): ShotEvidenceGraph {
+  return {
+    ...graph,
+    analysis_units: graph.analysis_units.map(normalizeAnalysisUnit),
+  }
+}
+
+function normalizeAnalysisUnit(unit: AnalysisUnit): AnalysisUnit {
+  const stableUnitId = analysisUnitStableId(unit)
+  return {
+    ...unit,
+    unit_id: stableUnitId,
+    understanding: {
+      ...unit.understanding,
+      unit_id: stableUnitId,
+    },
+  }
+}
+
+function analysisUnitStableId(unit: AnalysisUnit): string {
+  const key = analysisUnitMergeKey(unit).replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+  return key ? `unit_${key}` : unit.unit_id
+}
+
+function analysisUnitMergeKey(unit: AnalysisUnit): string {
+  return unit.shot_indices.length ? unit.shot_indices.join(':') : `${unit.start}:${unit.end}`
+}
+
+function mergeByKey<T>(left: T[], right: T[], keyOf: (item: T) => string): T[] {
+  const seen = new Set<string>()
+  const merged: T[] = []
+  for (const item of [...left, ...right]) {
+    const key = keyOf(item)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(item)
+  }
+  return merged
 }
 
 async function requestJson<T>(url: string, options: { method: 'POST'; body: unknown }): Promise<T> {

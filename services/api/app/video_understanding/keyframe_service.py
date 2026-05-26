@@ -1,6 +1,7 @@
 from pathlib import Path
 import logging
 import subprocess
+from typing import Optional
 
 from app.video_understanding.schemas import FrameEvidence, KeyframeEvidence, VideoShot
 
@@ -49,14 +50,30 @@ def extract_frame_evidence(
         ):
             extracted_time = None
             local_path = None
+            last_failure_reason = None
             for frame_time in _frame_attempt_times(shot, primary_time):
                 filename = f"shot_{shot.index:04d}_{frame_index:02d}_{role}_{int(frame_time * 1000):08d}.jpg"
                 local_path = output_dir / filename
-                if _extract_one_frame(video_path, shot, frame_time, local_path):
+                extracted, failure_reason = _extract_one_frame(
+                    video_path,
+                    shot,
+                    frame_time,
+                    local_path,
+                    log_warning=False,
+                    warning_subject="frame",
+                )
+                if extracted:
                     extracted_time = frame_time
                     break
+                last_failure_reason = failure_reason or f"frame_time={frame_time:.3f}"
 
             if extracted_time is None or local_path is None:
+                _log_frame_warning(
+                    video_path,
+                    shot,
+                    local_path or output_dir / f"shot_{shot.index:04d}_{frame_index:02d}_{role}.jpg",
+                    "all fallback attempts failed" + (f"; last_attempt={last_failure_reason}" if last_failure_reason else ""),
+                )
                 continue
 
             frames.append(
@@ -88,7 +105,14 @@ def extract_keyframes(
         filename = f"shot_{shot.index:04d}_{int(shot.keyframe_time * 1000):08d}.jpg"
         local_path = output_dir / filename
 
-        if not _extract_one_frame(video_path, shot, shot.keyframe_time, local_path):
+        extracted, _ = _extract_one_frame(
+            video_path,
+            shot,
+            shot.keyframe_time,
+            local_path,
+            warning_subject="keyframe",
+        )
+        if not extracted:
             continue
 
         keyframes.append(
@@ -117,7 +141,15 @@ def _frame_attempt_times(shot: VideoShot, primary_time: float) -> list[float]:
     return attempts
 
 
-def _extract_one_frame(video_path: Path, shot: VideoShot, frame_time: float, local_path: Path) -> bool:
+def _extract_one_frame(
+    video_path: Path,
+    shot: VideoShot,
+    frame_time: float,
+    local_path: Path,
+    *,
+    log_warning: bool = True,
+    warning_subject: str = "frame",
+) -> tuple[bool, Optional[str]]:
     try:
         result = subprocess.run(
             [
@@ -142,30 +174,54 @@ def _extract_one_frame(video_path: Path, shot: VideoShot, frame_time: float, loc
             timeout=FFMPEG_TIMEOUT_SECONDS,
         )
     except FileNotFoundError as exc:
-        _log_frame_warning(video_path, shot, local_path, f"ffmpeg executable not found: {exc}")
-        return False
+        reason = f"ffmpeg executable not found: {exc}"
+        if log_warning:
+            _log_frame_warning(video_path, shot, local_path, reason, warning_subject=warning_subject)
+        return False, reason
     except subprocess.TimeoutExpired as exc:
-        _log_frame_warning(video_path, shot, local_path, f"ffmpeg timed out after {exc.timeout}s")
-        return False
+        reason = f"ffmpeg timed out after {exc.timeout}s"
+        if log_warning:
+            _log_frame_warning(video_path, shot, local_path, reason, warning_subject=warning_subject)
+        _cleanup_failed_frame(local_path)
+        return False, reason
 
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
         reason = f"ffmpeg exited with returncode={result.returncode}"
         if stderr:
             reason = f"{reason}; stderr={stderr}"
-        _log_frame_warning(video_path, shot, local_path, reason)
-        return False
+        if log_warning:
+            _log_frame_warning(video_path, shot, local_path, reason, warning_subject=warning_subject)
+        _cleanup_failed_frame(local_path)
+        return False, reason
 
     if not local_path.is_file():
-        _log_frame_warning(video_path, shot, local_path, "target file was not created")
-        return False
+        reason = "target file was not created"
+        if log_warning:
+            _log_frame_warning(video_path, shot, local_path, reason, warning_subject=warning_subject)
+        return False, reason
 
-    return True
+    return True, None
 
 
-def _log_frame_warning(video_path: Path, shot: VideoShot, target_path: Path, reason: str) -> None:
+def _cleanup_failed_frame(local_path: Path) -> None:
+    try:
+        local_path.unlink(missing_ok=True)
+    except OSError:
+        logger.debug("failed to clean up extracted frame target_path=%s", local_path, exc_info=True)
+
+
+def _log_frame_warning(
+    video_path: Path,
+    shot: VideoShot,
+    target_path: Path,
+    reason: str,
+    *,
+    warning_subject: str = "frame",
+) -> None:
     logger.warning(
-        "failed to extract frame shot_index=%s video_path=%s target_path=%s reason=%s",
+        "failed to extract %s shot_index=%s video_path=%s target_path=%s reason=%s",
+        warning_subject,
         shot.index,
         video_path,
         target_path,

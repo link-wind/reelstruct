@@ -4,7 +4,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from app.video_understanding.schemas import KeyframeEvidence, VideoSignal
+from app.video_understanding.schemas import KeyframeEvidence, ShotEvidenceGraph, VideoSignal
 
 
 class SampleVideoInput(BaseModel):
@@ -27,6 +27,13 @@ class SampleUploadResponse(BaseModel):
 class TranscriptUploadResponse(BaseModel):
     filename: str
     transcript_summary: str
+
+
+class SampleEvidenceRequest(BaseModel):
+    sample_id: str
+    sample_local_path: str
+    video_signal: VideoSignal
+    shot_indices: list[int] = Field(default_factory=list)
 
 
 class MaterialFitAnalysis(BaseModel):
@@ -101,6 +108,7 @@ class TemplateStructure(BaseModel):
     rhythm_summary: str
     packaging_notes: list[str] = Field(default_factory=list)
     analysis_summary: SampleAnalysisSummary
+    shot_evidence_graph: Optional[ShotEvidenceGraph] = None
 
 
 class MaterialGap(BaseModel):
@@ -328,6 +336,7 @@ class StructurePreviewRequest(BaseModel):
     content: NewContentInput
     sample_local_path: str = ""
     use_ai_structure: bool = True
+    shot_evidence_graph: Optional[ShotEvidenceGraph] = None
     template_id: str = ""
     variant: Literal["standard", "high_click", "high_conversion", "fast_rhythm"] = "standard"
     use_ai_transfer_explanation: bool = False
@@ -339,6 +348,7 @@ class StructurePreviewResponse(BaseModel):
     template: TemplateStructure
     transfer_plan: TransferPlan
     composition: CompositionSpec
+    shot_evidence_graph: Optional[ShotEvidenceGraph] = None
 
 
 class StructureVariantSummary(BaseModel):

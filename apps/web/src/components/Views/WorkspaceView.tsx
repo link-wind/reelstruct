@@ -2,12 +2,17 @@ import React, { useEffect, useMemo, useState } from 'react'
 import WorkflowNav, { Stage } from '../Workspace/WorkflowNav'
 import AgentActionPanel, { ChatMessage } from '../Workspace/AgentActionPanel'
 import WorkPanel from '../Workspace/WorkPanel'
-import { useReelStruct } from '../../hooks/useReelStruct'
+import { mergeShotEvidenceGraphs, useReelStruct } from '../../hooks/useReelStruct'
 
 function formatSeconds(secs: number) {
   const minutes = Math.floor(secs / 60)
   const seconds = Math.floor(secs % 60)
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+}
+
+function formatUnitId(unit: { unit_id: string; shot_indices: number[]; start: number; end: number }) {
+  if (unit.shot_indices.length) return `unit_${unit.shot_indices.join('_')}`
+  return `${unit.unit_id}_${unit.start}_${unit.end}`.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }
 
 function isBusyStatus(status: string) {
@@ -26,6 +31,13 @@ function deriveProductName(prompt: string) {
   const [firstSignal] = extractPromptSignals(prompt)
   const base = firstSignal || prompt.trim()
   return base.length > 24 ? `${base.slice(0, 24)}...` : base
+}
+
+function mediaUrl(path: string) {
+  const apiOrigin = process.env.NEXT_PUBLIC_REELSTRUCT_API_ORIGIN || 'http://127.0.0.1:8010'
+  if (!path) return ''
+  if (/^https?:\/\//.test(path)) return path
+  return `${apiOrigin}${path.startsWith('/') ? path : `/${path}`}`
 }
 
 const STAGE_COPY: Record<Stage, { title: string; description: string }> = {
@@ -76,6 +88,8 @@ export default function WorkspaceView({ taskText, reelStruct }: WorkspaceViewPro
     error,
     uploadSample,
     uploadMaterialAsset,
+    generateOcrEvidence,
+    generateAsrEvidence,
     runDemo,
     videoUrl,
     run,
@@ -84,6 +98,7 @@ export default function WorkspaceView({ taskText, reelStruct }: WorkspaceViewPro
     analysisSource,
     analysisConfidence,
     analysisWarnings,
+    manualEvidenceGraph,
     selectedGaps,
     content,
     setContent,
@@ -170,6 +185,7 @@ export default function WorkspaceView({ taskText, reelStruct }: WorkspaceViewPro
 
   const mappingItems = useMemo(() => {
     return (preview?.transfer_plan.mappings || []).map((mapping) => ({
+      key: mapping.slot_id,
       label: mapping.asset_requirement || mapping.target_message,
       score: mapping.asset_strategy || '已生成映射',
       percent: 100,
@@ -232,6 +248,135 @@ export default function WorkspaceView({ taskText, reelStruct }: WorkspaceViewPro
       warnings: analysisWarnings,
     }
   }, [analysisConfidence, analysisSource, analysisSummary, analysisWarnings])
+
+  const mergedShotEvidenceGraph = useMemo(() => {
+    const baseGraph = run?.preview.shot_evidence_graph || preview?.shot_evidence_graph || null
+    return manualEvidenceGraph ? mergeShotEvidenceGraphs(baseGraph, manualEvidenceGraph) : baseGraph
+  }, [manualEvidenceGraph, preview?.shot_evidence_graph, run?.preview.shot_evidence_graph])
+
+  const shotEvidence = useMemo(() => {
+    const graph = mergedShotEvidenceGraph
+    if (graph?.shots?.length) {
+      const graphShotLookup = new Map(graph.shots.map((node) => [node.shot.index, node]))
+      const signalShots = sampleUpload?.video_signal?.shots || []
+      const displayShots = signalShots.length ? signalShots : graph.shots.map((node) => node.shot)
+      return displayShots.map((shot) => {
+        const node = graphShotLookup.get(shot.index)
+        return {
+          shotIndex: shot.index,
+          time: `${formatSeconds(shot.start)} - ${formatSeconds(shot.end)}`,
+          frames: (node?.frames || []).map((frame) => ({
+            role: frame.role,
+            time: frame.time,
+            publicUrl: mediaUrl(frame.public_url),
+          })),
+          ocrTexts: (node?.ocr_texts || []).map((item) => ({
+            text: item.text,
+            frameIndex: item.frame_index,
+            frameTime: item.frame_time,
+            position: item.position,
+            confidence: item.confidence,
+          })),
+          transcriptTexts: (node?.transcript_texts || []).map((item) => ({
+            text: item.text,
+            sourceStart: item.source_start,
+            sourceEnd: item.source_end,
+            overlapRatio: item.overlap_ratio,
+          })),
+          visualSummary: node?.understanding?.visual_summary || '',
+          textSummary: node?.understanding?.text_summary || '',
+          functionHint: node?.understanding?.creative_function_hint || '',
+          confidence: node?.understanding?.confidence || 0,
+          warnings: node?.understanding?.warnings || [],
+        }
+      })
+    }
+
+    const signal = sampleUpload?.video_signal
+    const keyframeLookup = new Map((sampleUpload?.keyframes || []).map((keyframe) => [keyframe.shot_index, keyframe]))
+    return (signal?.shots || []).map((shot) => {
+      const keyframe = keyframeLookup.get(shot.index)
+      return {
+        shotIndex: shot.index,
+        time: `${formatSeconds(shot.start)} - ${formatSeconds(shot.end)}`,
+        frames: keyframe
+          ? [
+              {
+                role: 'middle',
+                time: keyframe.keyframe_time,
+                publicUrl: mediaUrl(keyframe.public_url),
+              },
+            ]
+          : [],
+        visualSummary: '',
+        ocrTexts: [],
+        transcriptTexts: [],
+        textSummary: '',
+        functionHint: '',
+        confidence: 0,
+        warnings: [],
+      }
+    })
+  }, [
+    mergedShotEvidenceGraph,
+    sampleUpload?.keyframes,
+    sampleUpload?.video_signal,
+  ])
+
+  const analysisUnits = useMemo(() => {
+    const graph = mergedShotEvidenceGraph
+    if (!graph?.analysis_units?.length) return []
+    const shotLookup = new Map(shotEvidence.map((shot) => [shot.shotIndex, shot]))
+    return graph.analysis_units.map((unit) => ({
+      unitId: formatUnitId(unit),
+      time: `${formatSeconds(unit.start)} - ${formatSeconds(unit.end)}`,
+      duration: unit.duration,
+      shotIndices: unit.shot_indices,
+      representativeFrames: (unit.representative_frames || []).map((frame) => ({
+        role: frame.role,
+        time: frame.time,
+        publicUrl: mediaUrl(frame.public_url),
+        shotIndex: frame.shot_index,
+      })),
+      ocrTexts: (unit.ocr_texts || []).map((item) => ({
+        text: item.text,
+        frameIndex: item.frame_index,
+        frameTime: item.frame_time,
+        position: item.position,
+        confidence: item.confidence,
+      })),
+      transcriptTexts: (unit.transcript_texts || []).map((item) => ({
+        text: item.text,
+        sourceStart: item.source_start,
+        sourceEnd: item.source_end,
+        overlapRatio: item.overlap_ratio,
+      })),
+      visualSummary: unit.understanding?.visual_summary || '',
+      textSummary: unit.understanding?.text_summary || '',
+      functionHint: unit.understanding?.creative_function_hint || '',
+      confidence: unit.understanding?.confidence || 0,
+      warnings: unit.understanding?.warnings || [],
+      shots: unit.shot_indices
+        .map((shotIndex) => shotLookup.get(shotIndex))
+        .filter((shot): shot is NonNullable<typeof shot> => Boolean(shot)),
+    }))
+  }, [mergedShotEvidenceGraph, shotEvidence])
+
+  const shotEvidenceWarnings = useMemo(() => {
+    return mergedShotEvidenceGraph?.warnings || []
+  }, [mergedShotEvidenceGraph])
+
+  const shotRelations = useMemo(() => {
+    const graph = mergedShotEvidenceGraph
+    return (graph?.relations || []).map((relation) => ({
+      fromShot: relation.from_shot,
+      toShot: relation.to_shot,
+      relationType: relation.relation_type,
+      summary: relation.relation_summary,
+      semanticShift: relation.semantic_shift,
+      confidence: relation.confidence,
+    }))
+  }, [mergedShotEvidenceGraph])
 
   const progressItems = useMemo(() => {
     return [
@@ -382,13 +527,20 @@ export default function WorkspaceView({ taskText, reelStruct }: WorkspaceViewPro
             onUploadVideo={handleUploadVideo}
             onUploadMaterialAsset={(slotId, file) => void uploadMaterialAsset(slotId, file)}
             onGenerate={handleGenerate}
+            onGenerateOcrEvidence={() => void generateOcrEvidence()}
+            onGenerateAsrEvidence={() => void generateAsrEvidence()}
             canGenerate={Boolean(sampleUpload) && !busy}
+            canGenerateEvidence={Boolean(sampleUpload) && !busy}
             isBusy={busy}
             status={status}
             error={error}
             sampleAnalysis={sampleAnalysis}
             targetBrief={targetBrief}
             analysis={analysisView}
+            analysisUnits={analysisUnits}
+            shotEvidence={shotEvidence}
+            shotEvidenceWarnings={shotEvidenceWarnings}
+            shotRelations={shotRelations}
             transferExplanations={transferExplanations}
             materialGaps={gapItems}
             result={resultView}

@@ -22,8 +22,8 @@ export default function TargetBriefPanel({ brief }: { brief: TargetBriefViewMode
         <p>{brief.topic || '还没有目标任务，请返回首页输入迁移目标。'}</p>
         {brief.sellingPoints.length ? (
           <div className="tag-row">
-            {brief.sellingPoints.map((point) => (
-              <span key={point}>{point}</span>
+            {brief.sellingPoints.map((point, index) => (
+              <span key={`selling-point-${index}-${point}`}>{point}</span>
             ))}
           </div>
         ) : null}

@@ -43,8 +43,8 @@ export default function MaterialGapPanel({ gaps, onUploadAsset }: MaterialGapPan
               ) : null}
               {gap.suggestedShots.length ? (
                 <ul>
-                  {gap.suggestedShots.map((shot) => (
-                    <li key={shot}>{shot}</li>
+                  {gap.suggestedShots.map((shot, index) => (
+                    <li key={`${gap.slotId}-suggested-shot-${index}-${shot}`}>{shot}</li>
                   ))}
                 </ul>
               ) : null}

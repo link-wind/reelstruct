@@ -161,6 +161,55 @@ def test_extract_frame_evidence_retries_slot_with_keyframe_fallback_after_primar
     assert [Path(frame.local_path).name for frame in frames] == ["shot_0004_01_middle_00000400.jpg"]
 
 
+def test_extract_frame_evidence_does_not_log_warning_when_fallback_succeeds(tmp_path, caplog):
+    shots = [VideoShot(index=4, start=0.0, end=0.6, duration=0.6, keyframe_time=0.4)]
+    attempted_ss_times: list[str] = []
+
+    def fake_run(args, **kwargs):
+        attempted_ss_times.append(args[args.index("-ss") + 1])
+        if len(attempted_ss_times) == 2:
+            Path(args[-1]).write_bytes(b"jpg")
+            return CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        return CompletedProcess(args=args, returncode=1, stdout="", stderr="first attempt failed")
+
+    caplog.set_level(logging.WARNING)
+
+    with patch("app.video_understanding.keyframe_service.subprocess.run", side_effect=fake_run):
+        frames = extract_frame_evidence(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "frames",
+            public_prefix="/frames",
+        )
+
+    assert frames
+    assert attempted_ss_times == ["0.300", "0.400"]
+    assert caplog.records == []
+
+
+def test_extract_frame_evidence_logs_once_when_all_fallbacks_fail(tmp_path, caplog):
+    shots = [VideoShot(index=4, start=0.0, end=0.6, duration=0.6, keyframe_time=0.4)]
+
+    def fake_run(args, **kwargs):
+        return CompletedProcess(args=args, returncode=1, stdout="", stderr="still failing")
+
+    caplog.set_level(logging.WARNING)
+
+    with patch("app.video_understanding.keyframe_service.subprocess.run", side_effect=fake_run):
+        frames = extract_frame_evidence(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "frames",
+            public_prefix="/frames",
+        )
+
+    assert frames == []
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "failed to extract frame" in warnings[0].message
+    assert "shot_index=4" in warnings[0].message
+
+
 def test_extract_keyframes_skips_when_ffmpeg_is_missing(tmp_path):
     shots = [VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)]
 
@@ -258,6 +307,28 @@ def test_extract_keyframes_extracts_only_representative_frame_for_compatibility(
     assert "14.000" in run.call_args.args[0]
 
 
+def test_extract_keyframes_preserves_keyframe_warning_phrase(tmp_path, caplog):
+    shots = [VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)]
+
+    with (
+        caplog.at_level(logging.WARNING, logger="app.video_understanding.keyframe_service"),
+        patch(
+            "app.video_understanding.keyframe_service.subprocess.run",
+            return_value=CompletedProcess(args=["ffmpeg"], returncode=1, stdout="", stderr="bad input"),
+        ),
+    ):
+        keyframes = extract_keyframes(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "keyframes",
+            public_prefix="/keyframes",
+        )
+
+    assert keyframes == []
+    assert "failed to extract keyframe" in caplog.text
+    assert "failed to extract frame" not in caplog.text
+
+
 def test_extract_keyframes_returns_successes_and_logs_partial_failures(tmp_path, caplog):
     shots = [
         VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
@@ -307,6 +378,25 @@ def test_extract_keyframes_logs_warning_when_output_file_is_missing(tmp_path, ca
     assert keyframes == []
     assert "target file was not created" in caplog.text
     assert "shot_index=1" in caplog.text
+
+
+def test_extract_frame_evidence_cleans_up_failed_candidate_files(tmp_path):
+    shots = [VideoShot(index=4, start=0.0, end=0.6, duration=0.6, keyframe_time=0.4)]
+
+    def fake_run(args, **kwargs):
+        Path(args[-1]).write_bytes(b"partial")
+        return CompletedProcess(args=args, returncode=1, stdout="", stderr="still failing")
+
+    with patch("app.video_understanding.keyframe_service.subprocess.run", side_effect=fake_run):
+        frames = extract_frame_evidence(
+            Path("sample.mp4"),
+            shots,
+            output_dir=tmp_path / "frames",
+            public_prefix="/frames",
+        )
+
+    assert frames == []
+    assert not any((tmp_path / "frames").glob("*.jpg"))
 
 
 def test_extract_keyframes_returns_empty_and_logs_when_all_fail(tmp_path, caplog):

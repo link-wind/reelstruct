@@ -284,6 +284,547 @@ def test_analyze_keyframe_visuals_raises_value_error_when_output_text_is_not_jso
         analyze_keyframe_visuals([keyframe])
 
 
+def test_understand_shots_with_ai_posts_multiple_frames_and_returns_understanding(monkeypatch, tmp_path):
+    from app.video_understanding.schemas import (
+        AnalysisUnit,
+        FrameEvidence,
+        FrameOCRText,
+        ShotEvidenceGraph,
+        ShotEvidenceNode,
+        ShotTextAlignment,
+        VideoShot,
+    )
+    from app.video_understanding.shot_understanding_service import understand_shots_with_ai
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+    posted = {}
+    frame_paths = []
+    for index in range(2):
+        frame_path = tmp_path / f"shot_1_{index}.jpg"
+        frame_path.write_bytes(b"\xff\xd8fake-jpeg\xff\xd9")
+        frame_paths.append(frame_path)
+
+    shot_node = ShotEvidenceNode(
+        shot=VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+        frames=[
+            FrameEvidence(
+                shot_index=1,
+                frame_index=1,
+                time=0.15,
+                role="start",
+                local_path=str(frame_paths[0]),
+                public_url="/keyframes/shot_1_start.jpg",
+            ),
+            FrameEvidence(
+                shot_index=1,
+                frame_index=2,
+                time=1,
+                role="middle",
+                local_path=str(frame_paths[1]),
+                public_url="/keyframes/shot_1_middle.jpg",
+            ),
+        ],
+        ocr_texts=[
+            FrameOCRText(
+                shot_index=1,
+                frame_index=1,
+                frame_time=0.15,
+                text="限时优惠",
+                position="top",
+                confidence=0.91,
+            )
+        ],
+        transcript_texts=[
+            ShotTextAlignment(
+                shot_index=1,
+                text="早上来不及吃饭？",
+                source_start=0.2,
+                source_end=1.4,
+                overlap_ratio=0.6,
+            )
+        ],
+    )
+    graph = ShotEvidenceGraph(
+        shots=[
+            shot_node
+        ],
+        analysis_units=[
+            AnalysisUnit(
+                unit_id="unit_1",
+                shot_indices=[1],
+                start=0,
+                end=2,
+                duration=2,
+                representative_frames=shot_node.frames,
+                ocr_texts=shot_node.ocr_texts,
+                transcript_texts=shot_node.transcript_texts,
+            )
+        ]
+    )
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "output_text": (
+                    '{"visual_summary":"人物展示产品并口播","text_summary":"画面有卖点字幕",'
+                    '"subject":"人物和产品","scene":"室内口播","action":"展示产品",'
+                    '"packaging_signals":["底部字幕","产品露出"],'
+                    '"creative_function_hint":"product_intro","confidence":0.84,"warnings":[]}'
+                )
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            posted["client_kwargs"] = kwargs
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            posted["url"] = url
+            posted["headers"] = headers
+            posted["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr("app.video_understanding.shot_understanding_service.httpx.Client", FakeClient)
+
+    understood = understand_shots_with_ai(graph)
+
+    understanding = understood.shots[0].understanding
+    assert understanding.visual_summary == "人物展示产品并口播"
+    assert understanding.subject == "人物和产品"
+    assert understanding.creative_function_hint == "product_intro"
+    assert understanding.confidence == 0.84
+    content = posted["json"]["input"][0]["content"]
+    image_parts = [part for part in content if part["type"] == "input_image"]
+    prompt_text = content[0]["text"]
+    assert len(image_parts) == 2
+    assert all(part["image_url"].startswith("data:image/jpeg;base64,") for part in image_parts)
+    assert "限时优惠" in prompt_text
+    assert "ocr_texts" in prompt_text
+    assert "早上来不及吃饭？" in prompt_text
+    assert "transcript_texts" in prompt_text
+    assert posted["headers"]["Authorization"] == "Bearer test-secret-key"
+
+
+def test_understand_shots_with_ai_filters_repeated_and_noisy_ocr_from_prompt(monkeypatch, tmp_path):
+    from app.video_understanding.schemas import (
+        AnalysisUnit,
+        FrameEvidence,
+        FrameOCRText,
+        ShotEvidenceGraph,
+        ShotEvidenceNode,
+        VideoShot,
+    )
+    from app.video_understanding.shot_understanding_service import understand_shots_with_ai
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+    posted = {}
+    frame_path = tmp_path / "unit.jpg"
+    frame_path.write_bytes(b"\xff\xd8fake-jpeg\xff\xd9")
+    frame = FrameEvidence(
+        shot_index=1,
+        frame_index=1,
+        time=0.5,
+        role="middle",
+        local_path=str(frame_path),
+        public_url="/keyframes/unit.jpg",
+    )
+    ocr_texts = [
+        FrameOCRText(shot_index=1, frame_index=1, frame_time=0.5, text="小红书", confidence=0.99),
+        FrameOCRText(shot_index=1, frame_index=2, frame_time=0.8, text="小红书", confidence=0.98),
+        FrameOCRText(shot_index=1, frame_index=1, frame_time=0.5, text="QX×x_L", confidence=0.82),
+        FrameOCRText(shot_index=1, frame_index=1, frame_time=0.5, text="SALE", confidence=0.93),
+        FrameOCRText(shot_index=1, frame_index=1, frame_time=0.5, text="限时优惠", confidence=0.88),
+    ]
+    shot_node = ShotEvidenceNode(
+        shot=VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+        frames=[frame],
+        ocr_texts=ocr_texts,
+    )
+    graph = ShotEvidenceGraph(
+        shots=[shot_node],
+        analysis_units=[
+            AnalysisUnit(
+                unit_id="unit_1",
+                shot_indices=[1],
+                start=0,
+                end=2,
+                duration=2,
+                representative_frames=[frame],
+                ocr_texts=ocr_texts,
+            )
+        ],
+    )
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "output_text": (
+                    '{"visual_summary":"有字幕包装的画面","text_summary":"限时优惠",'
+                    '"subject":"产品","scene":"营销画面","action":"展示",'
+                    '"packaging_signals":["字幕"],"creative_function_hint":"offer",'
+                    '"confidence":0.72,"warnings":[]}'
+                )
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            posted["prompt"] = json["input"][0]["content"][0]["text"]
+            return FakeResponse()
+
+    monkeypatch.setattr("app.video_understanding.shot_understanding_service.httpx.Client", FakeClient)
+
+    understand_shots_with_ai(graph)
+
+    prompt = posted["prompt"]
+    assert prompt.count("小红书") == 1
+    assert "限时优惠" in prompt
+    assert "SALE" in prompt
+    assert "QX×x_L" not in prompt
+
+
+def test_understand_shots_with_ai_prefers_analysis_units_over_per_shot_calls(monkeypatch, tmp_path):
+    from app.video_understanding.schemas import AnalysisUnit, FrameEvidence, ShotEvidenceGraph, ShotEvidenceNode, VideoShot
+    from app.video_understanding.shot_understanding_service import understand_shots_with_ai
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+    frame_path = tmp_path / "unit.jpg"
+    frame_path.write_bytes(b"\xff\xd8fake-jpeg\xff\xd9")
+    shots = [
+        ShotEvidenceNode(
+            shot=VideoShot(
+                index=index,
+                start=round((index - 1) * 0.5, 3),
+                end=round(index * 0.5, 3),
+                duration=0.5,
+                keyframe_time=round((index - 0.5) * 0.5, 3),
+            ),
+            frames=[
+                FrameEvidence(
+                    shot_index=index,
+                    frame_index=1,
+                    time=round((index - 0.5) * 0.5, 3),
+                    role="middle",
+                    local_path=str(frame_path),
+                    public_url=f"/keyframes/shot_{index}.jpg",
+                )
+            ],
+        )
+        for index in range(1, 21)
+    ]
+    units = [
+        AnalysisUnit(
+            unit_id="unit_1",
+            shot_indices=[node.shot.index for node in shots[:8]],
+            start=0,
+            end=4,
+            duration=4,
+            representative_frames=[shots[0].frames[0], shots[3].frames[0], shots[7].frames[0]],
+        ),
+        AnalysisUnit(
+            unit_id="unit_2",
+            shot_indices=[node.shot.index for node in shots[8:16]],
+            start=4,
+            end=8,
+            duration=4,
+            representative_frames=[shots[8].frames[0], shots[12].frames[0], shots[15].frames[0]],
+        ),
+        AnalysisUnit(
+            unit_id="unit_3",
+            shot_indices=[node.shot.index for node in shots[16:]],
+            start=8,
+            end=10,
+            duration=2,
+            representative_frames=[shots[16].frames[0], shots[-1].frames[0]],
+        ),
+    ]
+    graph = ShotEvidenceGraph(shots=shots, analysis_units=units)
+    calls = {"count": 0, "prompts": []}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "output_text": (
+                    '{"visual_summary":"一组连续快切展示产品","text_summary":"",'
+                    '"subject":"产品","scene":"快切片段","action":"展示",'
+                    '"packaging_signals":["快切"],"creative_function_hint":"product_demo",'
+                    '"confidence":0.72,"warnings":[]}'
+                )
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            calls["count"] += 1
+            calls["prompts"].append(json["input"][0]["content"][0]["text"])
+            return FakeResponse()
+
+    monkeypatch.setattr("app.video_understanding.shot_understanding_service.httpx.Client", FakeClient)
+
+    understood = understand_shots_with_ai(graph)
+
+    assert calls["count"] == 3
+    assert "unit_id=unit_1" in calls["prompts"][0]
+    assert "shot_indices=[1, 2, 3, 4, 5, 6, 7, 8]" in calls["prompts"][0]
+    assert [unit.understanding.visual_summary for unit in understood.analysis_units] == [
+        "一组连续快切展示产品",
+        "一组连续快切展示产品",
+        "一组连续快切展示产品",
+    ]
+    assert understood.shots[0].understanding.visual_summary == "一组连续快切展示产品"
+    assert understood.shots[19].understanding.creative_function_hint == "product_demo"
+
+
+def test_understand_shots_with_ai_requires_openai_api_key(monkeypatch):
+    from app.video_understanding.schemas import ShotEvidenceGraph, ShotEvidenceNode, VideoShot
+    from app.video_understanding.shot_understanding_service import understand_shots_with_ai
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    graph = ShotEvidenceGraph(
+        shots=[
+            ShotEvidenceNode(
+                shot=VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+            )
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY is required"):
+        understand_shots_with_ai(graph)
+
+
+def test_understand_shots_with_ai_retries_transient_503(monkeypatch, tmp_path):
+    from app.video_understanding.schemas import FrameEvidence, ShotEvidenceGraph, ShotEvidenceNode, VideoShot
+    from app.video_understanding.shot_understanding_service import understand_shots_with_ai
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+    monkeypatch.setattr("app.video_understanding.shot_understanding_service.RETRY_SLEEP_SECONDS", 0)
+    frame_path = tmp_path / "shot.jpg"
+    frame_path.write_bytes(b"\xff\xd8fake-jpeg\xff\xd9")
+    graph = ShotEvidenceGraph(
+        shots=[
+            ShotEvidenceNode(
+                shot=VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+                frames=[
+                    FrameEvidence(
+                        shot_index=1,
+                        frame_index=1,
+                        time=1,
+                        role="middle",
+                        local_path=str(frame_path),
+                        public_url="/keyframes/shot.jpg",
+                    )
+                ],
+            )
+        ]
+    )
+    calls = {"count": 0}
+
+    class RetryableResponse:
+        status_code = 503
+        text = '{"error":{"message":"Service temporarily unavailable"}}'
+
+        def raise_for_status(self):
+            request = httpx.Request("POST", "https://relay.example.com/v1/responses")
+            response = httpx.Response(
+                status_code=503,
+                json={"error": {"message": "Service temporarily unavailable"}},
+                request=request,
+            )
+            raise httpx.HTTPStatusError("service unavailable", request=request, response=response)
+
+    class SuccessResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "output_text": (
+                    '{"visual_summary":"产品特写","subject":"产品","scene":"桌面",'
+                    '"action":"展示","packaging_signals":[],"creative_function_hint":"product_intro",'
+                    '"confidence":0.7,"warnings":[]}'
+                )
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return RetryableResponse()
+            return SuccessResponse()
+
+    monkeypatch.setattr("app.video_understanding.shot_understanding_service.httpx.Client", FakeClient)
+
+    understood = understand_shots_with_ai(graph)
+
+    assert calls["count"] == 2
+    assert understood.shots[0].understanding.visual_summary == "产品特写"
+    assert understood.shots[0].understanding.confidence == 0.7
+
+
+def test_understand_shots_with_ai_uses_vision_model_when_shot_model_is_unset(monkeypatch, tmp_path):
+    from app.video_understanding.schemas import FrameEvidence, ShotEvidenceGraph, ShotEvidenceNode, VideoShot
+    from app.video_understanding.shot_understanding_service import understand_shots_with_ai
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+    monkeypatch.setenv("REELSTRUCT_VISION_MODEL", "relay-vision-model")
+    monkeypatch.delenv("REELSTRUCT_SHOT_UNDERSTANDING_MODEL", raising=False)
+    posted = {}
+    frame_path = tmp_path / "shot.jpg"
+    frame_path.write_bytes(b"\xff\xd8fake-jpeg\xff\xd9")
+    graph = ShotEvidenceGraph(
+        shots=[
+            ShotEvidenceNode(
+                shot=VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+                frames=[
+                    FrameEvidence(
+                        shot_index=1,
+                        frame_index=1,
+                        time=1,
+                        role="middle",
+                        local_path=str(frame_path),
+                        public_url="/keyframes/shot.jpg",
+                    )
+                ],
+            )
+        ]
+    )
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "output_text": (
+                    '{"visual_summary":"产品特写","subject":"产品","scene":"桌面",'
+                    '"action":"展示","packaging_signals":[],"creative_function_hint":"product_intro",'
+                    '"confidence":0.7,"warnings":[]}'
+                )
+            }
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            posted["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr("app.video_understanding.shot_understanding_service.httpx.Client", FakeClient)
+
+    understand_shots_with_ai(graph)
+
+    assert posted["json"]["model"] == "relay-vision-model"
+
+
+def test_understand_shots_with_ai_degrades_shot_after_repeated_503(monkeypatch, tmp_path):
+    from app.video_understanding.schemas import FrameEvidence, ShotEvidenceGraph, ShotEvidenceNode, VideoShot
+    from app.video_understanding.shot_understanding_service import understand_shots_with_ai
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+    monkeypatch.setattr("app.video_understanding.shot_understanding_service.RETRY_SLEEP_SECONDS", 0)
+    frame_path = tmp_path / "shot.jpg"
+    frame_path.write_bytes(b"\xff\xd8fake-jpeg\xff\xd9")
+    graph = ShotEvidenceGraph(
+        shots=[
+            ShotEvidenceNode(
+                shot=VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+                frames=[
+                    FrameEvidence(
+                        shot_index=1,
+                        frame_index=1,
+                        time=1,
+                        role="middle",
+                        local_path=str(frame_path),
+                        public_url="/keyframes/shot.jpg",
+                    )
+                ],
+            )
+        ]
+    )
+
+    class RetryableResponse:
+        status_code = 503
+        text = '{"error":{"message":"Service temporarily unavailable"}}'
+
+        def raise_for_status(self):
+            request = httpx.Request("POST", "https://relay.example.com/v1/responses")
+            response = httpx.Response(
+                status_code=503,
+                json={"error": {"message": "Service temporarily unavailable"}},
+                request=request,
+            )
+            raise httpx.HTTPStatusError("service unavailable", request=request, response=response)
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.calls = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            self.calls += 1
+            return RetryableResponse()
+
+    monkeypatch.setattr("app.video_understanding.shot_understanding_service.httpx.Client", FakeClient)
+
+    understood = understand_shots_with_ai(graph)
+
+    warning = understood.shots[0].understanding.warnings[0]
+    assert understood.shots[0].understanding.confidence == 0
+    assert "shot understanding failed" in warning
+    assert "status=503" in warning
+
+
 @pytest.mark.parametrize(
     "wrapped_json",
     [
@@ -299,6 +840,325 @@ def test_parse_json_output_accepts_json_fence_variants(wrapped_json):
 
     assert parsed["visual_summary"] == "A"
     assert parsed["confidence"] == 0.4
+
+
+def test_parse_graph_segments_accepts_valid_json():
+    from app.video_understanding.ai_graph_service import parse_graph_segments
+
+    result = parse_graph_segments(
+        {
+            "relations": [
+                {
+                    "from_shot": 1,
+                    "to_shot": 2,
+                    "relation_type": "contrast",
+                    "relation_summary": "开场痛点到解决方案",
+                    "rhythm_change": "快到中",
+                    "semantic_shift": "痛点转解决",
+                    "confidence": 0.81,
+                }
+            ],
+            "beats": [
+                {
+                    "beat_id": "beat_1",
+                    "label": "Hook",
+                    "shot_indices": [1],
+                    "start": 0.0,
+                    "end": 2.0,
+                    "function": "hook",
+                    "reason": "用提问引入",
+                    "confidence": 0.92,
+                }
+            ],
+            "segments": [
+                {
+                    "segment_id": "seg_1",
+                    "label": "Hook",
+                    "beat_ids": ["beat_1"],
+                    "shot_indices": [1],
+                    "start": 0.0,
+                    "end": 2.0,
+                    "purpose": "吸引注意",
+                    "method": "痛点提问",
+                    "evidence": ["shot 1 transcript: 熬夜脸很垮？"],
+                    "rhythm": "快",
+                    "packaging": "大字幕",
+                    "transferable_rule": "先抛问题",
+                    "non_transferable": "原商品名",
+                    "required_asset": "痛点场景",
+                    "confidence": 0.88,
+                }
+            ],
+            "warnings": ["evidence should stay grounded"],
+        }
+    )
+
+    assert result.relations[0].relation_type == "contrast"
+    assert result.beats[0].beat_id == "beat_1"
+    assert result.segments[0].evidence == ["shot 1 transcript: 熬夜脸很垮？"]
+    assert result.warnings == ["evidence should stay grounded"]
+
+
+def test_parse_graph_segments_normalizes_common_ai_field_aliases():
+    from app.video_understanding.ai_graph_service import parse_graph_segments
+
+    result = parse_graph_segments(
+        {
+            "relations": [
+                {
+                    "from_shot": 1,
+                    "to_shot": 2,
+                    "type": "adjacent_cut",
+                    "evidence": ["shot 1 ends at 10.083", "shot 2 starts at 10.083"],
+                    "through_shots": [3],
+                }
+            ],
+            "beats": [
+                {
+                    "beat_index": 1,
+                    "label": "Opening beat",
+                    "shot_indices": [1, 2],
+                    "evidence": ["shot 1 duration is 10.083"],
+                }
+            ],
+            "segments": [
+                {
+                    "segment_index": 1,
+                    "label": "Opening segment",
+                    "shot_indices": [1, 2],
+                    "evidence": [
+                        {"source": "shots[0].shot", "text": "shot 1 duration is 10.083"},
+                        "timeline adjacent cut",
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert result.relations[0].relation_type == "adjacent_cut"
+    assert "shot 1 ends at 10.083" in result.relations[0].relation_summary
+    assert result.beats[0].beat_id == "beat_1"
+    assert result.beats[0].start == 0
+    assert result.beats[0].end == 0
+    assert result.segments[0].segment_id == "seg_1"
+    assert result.segments[0].evidence[0] == "shots[0].shot: shot 1 duration is 10.083"
+
+
+def test_parse_graph_segments_infers_missing_time_ranges_from_graph_shots():
+    from app.video_understanding.ai_graph_service import parse_graph_segments
+    from app.video_understanding.shot_evidence_graph import build_initial_shot_evidence_graph
+
+    graph = build_initial_shot_evidence_graph(
+        shots=[
+            VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+            VideoShot(index=2, start=2, end=5, duration=3, keyframe_time=3.5),
+            VideoShot(index=3, start=5, end=7, duration=2, keyframe_time=6),
+        ],
+        frames=[],
+    )
+
+    result = parse_graph_segments(
+        {
+            "beats": [{"beat_index": 1, "label": "Bridge", "shot_indices": [2, 3]}],
+            "segments": [{"segment_index": 1, "label": "Demo", "shot_indices": [2, 3]}],
+        },
+        graph=graph,
+    )
+
+    assert result.beats[0].start == 2
+    assert result.beats[0].end == 7
+    assert result.segments[0].start == 2
+    assert result.segments[0].end == 7
+
+
+@pytest.mark.parametrize(
+    "wrapped_json",
+    [
+        '```json\n{"relations":[],"beats":[],"segments":[],"warnings":["ok"]}\n```',
+        '```JSON\n{"relations":[],"beats":[],"segments":[],"warnings":["ok"]}\n```',
+        '``` json\n{"relations":[],"beats":[],"segments":[],"warnings":["ok"]}\n```',
+    ],
+)
+def test_parse_graph_segments_accepts_json_fence_variants(wrapped_json):
+    from app.video_understanding.ai_graph_service import _parse_json_output
+
+    parsed = _parse_json_output(wrapped_json)
+
+    assert parsed["warnings"] == ["ok"]
+
+
+def test_aggregate_graph_structure_with_ai_parses_responses_output_content(monkeypatch):
+    from app.video_understanding.ai_graph_service import aggregate_graph_structure_with_ai
+    from app.video_understanding.shot_evidence_graph import build_initial_shot_evidence_graph
+
+    graph = build_initial_shot_evidence_graph(
+        shots=[VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)],
+        frames=[],
+    )
+    response_payload = {
+        "output": [
+            {
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": '```json\n{"warnings":["partial graph"],"segments":[]}\n```',
+                    }
+                ]
+            }
+        ]
+    }
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return response_payload
+
+    fake_client = Mock()
+    fake_client.__enter__ = Mock(return_value=fake_client)
+    fake_client.__exit__ = Mock(return_value=False)
+    fake_client.post = Mock(return_value=FakeResponse())
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.video_understanding.ai_graph_service.httpx.Client", Mock(return_value=fake_client))
+
+    result = aggregate_graph_structure_with_ai(graph)
+
+    assert result.warnings == ["partial graph"]
+    assert result.relations == []
+    assert fake_client.post.call_args.kwargs["headers"]["Authorization"] == "Bearer test-key"
+
+
+def test_aggregate_graph_structure_with_ai_retries_transient_503(monkeypatch):
+    from app.video_understanding.ai_graph_service import aggregate_graph_structure_with_ai
+    from app.video_understanding.shot_evidence_graph import build_initial_shot_evidence_graph
+
+    graph = build_initial_shot_evidence_graph(
+        shots=[VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)],
+        frames=[],
+    )
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.video_understanding.ai_graph_service.RETRY_SLEEP_SECONDS", 0)
+    calls = {"count": 0}
+
+    class RetryableResponse:
+        status_code = 503
+        text = '{"error":{"message":"Service temporarily unavailable"}}'
+
+        def raise_for_status(self):
+            request = httpx.Request("POST", "https://relay.example.com/v1/responses")
+            response = httpx.Response(
+                status_code=503,
+                json={"error": {"message": "Service temporarily unavailable"}},
+                request=request,
+            )
+            raise httpx.HTTPStatusError("service unavailable", request=request, response=response)
+
+    class SuccessResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"output_text": '{"warnings":["ok"],"segments":[]}'}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                return RetryableResponse()
+            return SuccessResponse()
+
+    monkeypatch.setattr("app.video_understanding.ai_graph_service.httpx.Client", FakeClient)
+
+    result = aggregate_graph_structure_with_ai(graph)
+
+    assert calls["count"] == 2
+    assert result.warnings == ["ok"]
+
+
+def test_parse_graph_segments_defaults_missing_collections_to_empty_lists():
+    from app.video_understanding.ai_graph_service import parse_graph_segments
+
+    result = parse_graph_segments({"warnings": ["partial output"]})
+
+    assert result.relations == []
+    assert result.beats == []
+    assert result.segments == []
+    assert result.warnings == ["partial output"]
+
+
+def test_apply_graph_aggregation_replaces_graph_parts_and_appends_warnings():
+    from app.video_understanding.schemas import GraphAggregationResult, ShotRelation
+    from app.video_understanding.shot_evidence_graph import (
+        apply_graph_aggregation,
+        build_initial_shot_evidence_graph,
+    )
+
+    graph = build_initial_shot_evidence_graph(
+        shots=[
+            VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+            VideoShot(index=2, start=2, end=4, duration=2, keyframe_time=3),
+        ],
+        frames=[],
+    ).model_copy(
+        update={
+            "relations": [
+                ShotRelation(
+                    from_shot=1,
+                    to_shot=2,
+                    relation_type="old",
+                    relation_summary="old relation",
+                )
+            ],
+            "warnings": ["existing warning"],
+        }
+    )
+
+    aggregation = GraphAggregationResult(
+        relations=[ShotRelation(from_shot=1, to_shot=2, relation_type="new")],
+        beats=[],
+        segments=[],
+        warnings=["existing warning", "new warning"],
+    )
+
+    merged = apply_graph_aggregation(graph, aggregation)
+
+    assert [relation.relation_type for relation in merged.relations] == ["new"]
+    assert merged.warnings == ["existing warning", "existing warning", "new warning"]
+    assert merged.beats == []
+    assert merged.segments == []
+
+
+def test_apply_graph_aggregation_preserves_existing_relations_when_ai_returns_none():
+    from app.video_understanding.schemas import GraphAggregationResult, ShotEvidenceGraph, ShotRelation
+    from app.video_understanding.shot_evidence_graph import apply_graph_aggregation
+
+    graph = ShotEvidenceGraph(
+        shots=[],
+        relations=[
+            ShotRelation(
+                from_shot=1,
+                to_shot=2,
+                relation_type="adjacent_cut",
+                relation_summary="baseline temporal continuity",
+            )
+        ],
+    )
+    aggregation = GraphAggregationResult(relations=[], warnings=["only partial evidence"])
+
+    merged = apply_graph_aggregation(graph, aggregation)
+
+    assert [relation.relation_type for relation in merged.relations] == ["adjacent_cut"]
+    assert merged.warnings == ["only partial evidence"]
 
 
 def test_decompose_video_structure_with_ai_requires_openai_api_key(monkeypatch):

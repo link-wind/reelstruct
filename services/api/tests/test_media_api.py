@@ -147,7 +147,13 @@ def test_upload_sample_video_returns_real_video_signal_and_keyframes():
     assert video_signal["metadata"]["fps"] > 0
     assert video_signal["shot_count"] == body["sample"]["shot_count"]
     assert video_signal["shot_count"] == len(video_signal["shots"])
-    assert video_signal["detection_method"] in {"scene_detect", "uniform_fallback"}
+    assert video_signal["detection_method"] in {
+        "scene_detect",
+        "pyscenedetect_adaptive",
+        "pyscenedetect_content",
+        "ffmpeg_scene_detect",
+        "uniform_fallback",
+    }
     assert video_signal["rhythm_metrics"]["avg_shot_duration"] > 0
 
     keyframes = body["keyframes"]

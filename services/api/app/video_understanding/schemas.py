@@ -30,7 +30,7 @@ class FrameEvidence(BaseModel):
     shot_index: int = Field(gt=0)
     frame_index: int = Field(gt=0)
     time: float = Field(ge=0)
-    role: Literal["start", "middle", "safe_end", "end", "third", "two_thirds"] = "middle"
+    role: Literal["start", "middle", "safe_end", "end", "third", "two_thirds", "ocr_heavy"] = "middle"
     local_path: str = Field(min_length=1)
     public_url: str = Field(min_length=1)
 
@@ -180,6 +180,21 @@ class ShotUnderstanding(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class AnalysisUnitUnderstanding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unit_id: str = Field(min_length=1)
+    visual_summary: str = ""
+    text_summary: str = ""
+    subject: str = ""
+    scene: str = ""
+    action: str = ""
+    packaging_signals: list[str] = Field(default_factory=list)
+    creative_function_hint: str = ""
+    confidence: float = Field(default=0, ge=0, le=1)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ShotEvidenceNode(BaseModel):
     shot: VideoShot
     frames: list[FrameEvidence] = Field(default_factory=list)
@@ -193,6 +208,30 @@ class ShotEvidenceNode(BaseModel):
             self.understanding = ShotUnderstanding(shot_index=self.shot.index)
         if self.understanding.shot_index != self.shot.index:
             raise ValueError("understanding.shot_index must match shot.index")
+        return self
+
+
+class AnalysisUnit(BaseModel):
+    unit_id: str = Field(min_length=1)
+    shot_indices: list[int] = Field(default_factory=list, min_length=1)
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    duration: float = Field(gt=0)
+    representative_frames: list[FrameEvidence] = Field(default_factory=list)
+    ocr_texts: list[FrameOCRText] = Field(default_factory=list)
+    transcript_texts: list[ShotTextAlignment] = Field(default_factory=list)
+    understanding: Optional[AnalysisUnitUnderstanding] = None
+
+    @model_validator(mode="after")
+    def validate_timing_and_understanding(self) -> "AnalysisUnit":
+        if self.end <= self.start:
+            raise ValueError("end must be greater than start")
+        if any(shot_index <= 0 for shot_index in self.shot_indices):
+            raise ValueError("shot_indices must contain only positive integers")
+        if self.understanding is None:
+            self.understanding = AnalysisUnitUnderstanding(unit_id=self.unit_id)
+        if self.understanding.unit_id != self.unit_id:
+            raise ValueError("understanding.unit_id must match unit_id")
         return self
 
 
@@ -243,6 +282,7 @@ class EvidenceBackedSegment(BaseModel):
 
 class ShotEvidenceGraph(BaseModel):
     shots: list[ShotEvidenceNode] = Field(default_factory=list)
+    analysis_units: list[AnalysisUnit] = Field(default_factory=list)
     relations: list[ShotRelation] = Field(default_factory=list)
     beats: list[CreativeBeat] = Field(default_factory=list)
     segments: list[EvidenceBackedSegment] = Field(default_factory=list)

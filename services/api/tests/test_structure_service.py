@@ -15,9 +15,14 @@ from app.video_understanding.schemas import (
     AIPackagingStructure,
     AIRhythmStructure,
     AIStructureAnalysis,
+    EvidenceBackedSegment,
+    ShotEvidenceGraph,
     VideoStructureSegment,
 )
-from app.video_understanding.template_adapter import adapt_ai_structure_to_template
+from app.video_understanding.template_adapter import (
+    adapt_ai_structure_to_template,
+    adapt_graph_segments_to_template,
+)
 
 
 def test_build_structure_preview_marks_missing_assets_and_tracks():
@@ -45,6 +50,79 @@ def test_build_structure_preview_marks_missing_assets_and_tracks():
     assert any("字幕" in item for item in gap_lookup["cta"].pickup_checklist)
     assert any(track.type == "card" for track in response.composition.tracks)
     assert response.composition.duration == 30
+
+
+def test_build_structure_preview_adds_rule_fallback_transfer_explanations():
+    response = build_structure_preview(
+        sample=SampleVideoInput(title="咖啡样例", duration=20, shot_count=6),
+        content=NewContentInput(
+            topic="咖啡店开业短视频",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        use_ai_transfer_explanation=False,
+    )
+
+    mapping = response.transfer_plan.mappings[0]
+
+    assert mapping.explanation.slot_id == mapping.slot_id
+    assert mapping.explanation.source_observation == mapping.source_method
+    assert mapping.explanation.target_expression == mapping.target_message
+    assert mapping.explanation.asset_plan == mapping.asset_strategy
+    assert mapping.explanation.transferable_principle
+
+
+def test_build_structure_preview_can_enrich_transfer_explanations_with_ai(monkeypatch):
+    from app.models import TransferExplanation
+
+    captured = {}
+
+    def fake_explainer(*, template, content, transfer_plan, graph, variant):
+        captured["topic"] = content.topic
+        captured["graph"] = graph
+        captured["variant"] = variant
+        return transfer_plan.model_copy(
+            update={
+                "mappings": [
+                    mapping.model_copy(
+                        update={
+                            "explanation": TransferExplanation(
+                                slot_id=mapping.slot_id,
+                                source_observation=f"AI 观察 {mapping.source_label}",
+                                transferable_principle="AI 判断先迁移表达功能，再替换商品内容",
+                                target_expression=f"AI 新表达：{content.product_name or content.topic}",
+                                asset_plan="AI 建议用现有镜头和标题卡共同支撑",
+                                gap_handling="AI 判断缺镜头时用卖点卡片补足",
+                                reasoning="AI 基于样例证据、目标卖点和素材缺口生成",
+                                confidence=0.82,
+                                warnings=[],
+                            )
+                        }
+                    )
+                    for mapping in transfer_plan.mappings
+                ]
+            }
+        )
+
+    monkeypatch.setattr("app.structure_service.explain_transfer_with_ai", fake_explainer)
+
+    response = build_structure_preview(
+        sample=SampleVideoInput(title="咖啡样例", duration=20, shot_count=6),
+        content=NewContentInput(
+            topic="咖啡店开业短视频",
+            product_name="巷口手作咖啡",
+            selling_points=["手作拉花", "新店开业优惠"],
+            available_assets=["开头吸引镜头", "使用过程镜头"],
+        ),
+        use_ai_transfer_explanation=True,
+        variant="high_click",
+    )
+
+    assert captured["topic"] == "咖啡店开业短视频"
+    assert captured["variant"] == "high_click"
+    assert response.transfer_plan.mappings[0].explanation.target_expression == "AI 新表达：巷口手作咖啡"
+    assert response.transfer_plan.mappings[0].explanation.confidence == 0.82
 
 
 def test_build_structure_preview_prefers_ai_template_when_provided():
@@ -160,6 +238,79 @@ def test_adapt_ai_structure_to_template_preserves_segments_evidence_and_source()
 
     beat_lookup = {item.slot_id: item.evidence for item in template.analysis_summary.narrative_beats}
     assert beat_lookup["proof_process"] == "第 2-3 镜展示手部动作和产品特写。"
+
+
+def test_adapt_graph_segments_to_template_preserves_evidence():
+    graph = ShotEvidenceGraph(
+        segments=[
+            EvidenceBackedSegment(
+                segment_id="segment_1",
+                label="开场钩子",
+                shot_indices=[1, 2],
+                start=0.24,
+                end=2.64,
+                purpose="快速建立停留理由",
+                required_asset="结果吸引镜头",
+                method="先抛结果再解释",
+                rhythm="前 3 秒加速进入",
+                transferable_rule="先给结果再讲原因",
+                non_transferable="不复制原品牌名和具体文案",
+                packaging="大标题 + 强对比字幕",
+                evidence=["第 1 镜出现结果画面", "第 2 镜补充字幕信息"],
+                confidence=0.84,
+            ),
+            EvidenceBackedSegment(
+                segment_id="segment_2",
+                label="使用证明",
+                shot_indices=[3],
+                start=2.64,
+                end=7.06,
+                purpose="展示过程支撑卖点",
+                required_asset="使用过程镜头",
+                method="动作展示 + 细节补充",
+                rhythm="中段稳定推进",
+                transferable_rule="保留过程证明的组织方式",
+                non_transferable="不复制原视频人物动作",
+                packaging="关键词贴纸",
+                evidence=["第 3 镜展示使用过程"],
+                confidence=0.66,
+            ),
+        ],
+        warnings=["graph 里缺少结尾 CTA 证据"],
+    )
+
+    template = adapt_graph_segments_to_template("咖啡样例", graph)
+
+    assert template.title == "咖啡样例 的 图谱可迁移结构"
+    assert template.script_pattern[0].id == "segment_1"
+    assert template.script_pattern[0].start == 0.2
+    assert template.script_pattern[0].duration == 2.4
+    assert template.script_pattern[0].sample_evidence == "第 1 镜出现结果画面；第 2 镜补充字幕信息"
+    assert template.script_pattern[0].evidence_shot_indices == [1, 2]
+    assert template.script_pattern[0].confidence == 0.84
+    assert template.script_pattern[0].required_asset == "结果吸引镜头"
+    assert template.script_pattern[0].method == "先抛结果再解释"
+    assert template.script_pattern[0].rhythm == "前 3 秒加速进入"
+    assert template.script_pattern[0].transferable_rule == "先给结果再讲原因"
+    assert template.script_pattern[0].non_transferable == "不复制原品牌名和具体文案"
+    assert template.script_pattern[0].packaging_intent == "大标题 + 强对比字幕"
+
+    analysis = template.analysis_summary
+    assert analysis.source == "ai"
+    assert analysis.warnings == ["graph 里缺少结尾 CTA 证据"]
+    assert analysis.metrics[0].label == "来源"
+    assert analysis.metrics[0].value == "图谱拆解"
+    assert analysis.metrics[1].label == "平均置信度"
+    assert analysis.metrics[1].value == "0.75"
+    assert analysis.metrics[2].label == "段落数"
+    assert analysis.metrics[2].value == "2"
+    assert analysis.metrics[3].label == "镜头数"
+    assert analysis.metrics[3].value == "3"
+    assert analysis.narrative_beats[0].evidence == "第 1 镜出现结果画面；第 2 镜补充字幕信息"
+    assert analysis.narrative_beats[1].evidence == "第 3 镜展示使用过程"
+    assert analysis.packaging_signals == ["大标题 + 强对比字幕", "关键词贴纸"]
+    assert template.rhythm_summary == "图谱来源，节奏由 segment 节点聚合生成"
+    assert template.packaging_notes == ["大标题 + 强对比字幕", "关键词贴纸"]
 
 
 def test_build_structure_preview_uses_existing_assets_when_available():

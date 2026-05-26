@@ -21,6 +21,7 @@ from app.models import (
     RunPreferredUpdateRequest,
     RunNoteUpdateRequest,
     RunRecordSummary,
+    SampleEvidenceRequest,
     SampleUploadResponse,
     StructureTemplateRecord,
     StructureTemplateSummary,
@@ -33,6 +34,7 @@ from app.models import (
     StructurePreviewRequest,
     StructurePreviewResponse,
 )
+from app.sample_evidence_service import generate_sample_asr_evidence, generate_sample_ocr_evidence
 from app.material_asset_service import save_material_upload
 from app.render_service import render_demo_video
 from app.run_record_service import (
@@ -58,6 +60,7 @@ from app.template_record_service import (
 )
 from app.workflow_service import create_demo_run
 from app.video_understanding.pipeline import build_ai_or_fallback_structure_template
+from app.video_understanding.schemas import ShotEvidenceGraph
 
 
 load_api_env()
@@ -192,10 +195,13 @@ def _build_ai_template_for_request(
         return None
     if not request.use_ai_structure or not request.sample_local_path.strip():
         return None
-    return build_ai_or_fallback_structure_template(
-        sample=request.sample,
-        sample_local_path=request.sample_local_path,
-    )
+    kwargs = {
+        "sample": request.sample,
+        "sample_local_path": request.sample_local_path,
+    }
+    if request.shot_evidence_graph is not None:
+        kwargs["text_evidence_graph"] = request.shot_evidence_graph
+    return build_ai_or_fallback_structure_template(**kwargs)
 
 
 @app.get("/api/runs/{run_id}", response_model=DemoRunResponse)
@@ -332,6 +338,28 @@ def upload_sample_video(file: UploadFile) -> SampleUploadResponse:
 @app.post("/api/samples/upload-transcript", response_model=TranscriptUploadResponse)
 def upload_sample_transcript(file: UploadFile) -> TranscriptUploadResponse:
     return extract_transcript_upload(file)
+
+
+@app.post("/api/samples/evidence/ocr", response_model=ShotEvidenceGraph)
+def generate_ocr_evidence(request: SampleEvidenceRequest) -> ShotEvidenceGraph:
+    try:
+        return generate_sample_ocr_evidence(request, keyframes_dir=KEYFRAMES_DIR)
+    except (ValueError, RuntimeError, OSError) as exc:
+        detail = "OCR 证据生成失败。"
+        if str(exc):
+            detail = f"{detail} {str(exc)}"
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
+@app.post("/api/samples/evidence/asr", response_model=ShotEvidenceGraph)
+def generate_asr_evidence(request: SampleEvidenceRequest) -> ShotEvidenceGraph:
+    try:
+        return generate_sample_asr_evidence(request, keyframes_dir=KEYFRAMES_DIR)
+    except (ValueError, RuntimeError, OSError) as exc:
+        detail = "ASR 证据生成失败。"
+        if str(exc):
+            detail = f"{detail} {str(exc)}"
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 
 @app.post("/api/materials/upload", response_model=UserSlotAsset)

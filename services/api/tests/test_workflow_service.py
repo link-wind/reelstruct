@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models import SampleAnalysisSummary, SampleVideoInput, StructureSlot, TemplateStructure
+from app.video_understanding.schemas import ShotEvidenceGraph, ShotEvidenceNode, ShotUnderstanding, VideoShot
 from app.video_understanding.pipeline import build_fallback_structure_template
 
 
@@ -54,6 +55,21 @@ def test_preview_structure_uses_ai_template_when_sample_path_is_enabled(monkeypa
     client = TestClient(app)
     video_path = tmp_path / "sample.mp4"
     video_path.write_bytes(b"video")
+    graph = ShotEvidenceGraph(
+        warnings=["graph warning"],
+        shots=[
+            ShotEvidenceNode(
+                shot=VideoShot(index=1, start=0, end=3, duration=3, keyframe_time=1.5),
+                understanding=ShotUnderstanding(
+                    shot_index=1,
+                    visual_summary="人物展示产品",
+                    creative_function_hint="product_intro",
+                    confidence=0.8,
+                    warnings=["shot understanding warning"],
+                ),
+            )
+        ]
+    )
 
     ai_template = TemplateStructure(
         title="AI 拆解模板",
@@ -73,6 +89,7 @@ def test_preview_structure_uses_ai_template_when_sample_path_is_enabled(monkeypa
         rhythm_summary="AI 节奏",
         packaging_notes=["AI 包装"],
         analysis_summary=SampleAnalysisSummary(headline="AI 拆解", source="ai", confidence=0.88),
+        shot_evidence_graph=graph,
     )
 
     def fake_ai_template(*, sample, sample_local_path):
@@ -100,6 +117,73 @@ def test_preview_structure_uses_ai_template_when_sample_path_is_enabled(monkeypa
     assert body["template"]["title"] == "AI 拆解模板"
     assert body["template"]["analysis_summary"]["source"] == "ai"
     assert body["template"]["script_pattern"][0]["evidence_shot_indices"] == [1]
+    assert body["shot_evidence_graph"]["shots"][0]["understanding"]["visual_summary"] == "人物展示产品"
+    assert body["shot_evidence_graph"]["shots"][0]["understanding"]["warnings"] == [
+        "shot understanding warning"
+    ]
+    assert body["shot_evidence_graph"]["warnings"] == ["graph warning"]
+
+
+def test_preview_structure_passes_manual_text_evidence_graph_to_ai(monkeypatch, tmp_path):
+    client = TestClient(app)
+    video_path = tmp_path / "sample.mp4"
+    video_path.write_bytes(b"video")
+    captured = {}
+
+    ai_template = build_fallback_structure_template(sample=SampleVideoInput(title="样例"), reason="test")
+
+    def fake_ai_template(*, sample, sample_local_path, text_evidence_graph):
+        captured["sample_local_path"] = sample_local_path
+        captured["ocr_text"] = text_evidence_graph.shots[0].ocr_texts[0].text
+        captured["asr_text"] = text_evidence_graph.shots[0].transcript_texts[0].text
+        return ai_template
+
+    monkeypatch.setattr("app.main.build_ai_or_fallback_structure_template", fake_ai_template)
+
+    response = client.post(
+        "/api/structure/preview",
+        json={
+            "sample": {"title": "样例", "duration": 20, "shot_count": 6},
+            "sample_local_path": str(video_path),
+            "use_ai_structure": True,
+            "shot_evidence_graph": {
+                "shots": [
+                    {
+                        "shot": {"index": 1, "start": 0, "end": 2, "duration": 2, "keyframe_time": 1},
+                        "ocr_texts": [
+                            {
+                                "shot_index": 1,
+                                "frame_index": 1,
+                                "frame_time": 1,
+                                "text": "手动 OCR",
+                                "confidence": 0.9,
+                            }
+                        ],
+                        "transcript_texts": [
+                            {
+                                "shot_index": 1,
+                                "text": "手动 ASR",
+                                "source_start": 0.2,
+                                "source_end": 1.4,
+                                "overlap_ratio": 0.6,
+                            }
+                        ],
+                    }
+                ]
+            },
+            "content": {
+                "topic": "新品短视频",
+                "available_assets": ["结果吸引镜头"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "sample_local_path": str(video_path),
+        "ocr_text": "手动 OCR",
+        "asr_text": "手动 ASR",
+    }
 
 
 def test_demo_run_marks_fallback_when_ai_decomposition_fails(monkeypatch, tmp_path):
@@ -135,6 +219,73 @@ def test_demo_run_marks_fallback_when_ai_decomposition_fails(monkeypatch, tmp_pa
     assert body["preview"]["template"]["analysis_summary"]["source"] == "fallback"
     assert body["preview"]["template"]["analysis_summary"]["warnings"] == ["AI 结构拆解未完成：OPENAI_API_KEY is required"]
     assert body["trace"][0]["message"] == "AI 结构拆解未完成，已使用基础兜底拆解继续生成。"
+
+
+def test_demo_run_returns_ai_shot_evidence_graph(monkeypatch, tmp_path):
+    client = TestClient(app)
+    video_path = tmp_path / "sample.mp4"
+    video_path.write_bytes(b"video")
+    graph = ShotEvidenceGraph(
+        warnings=["graph warning"],
+        shots=[
+            ShotEvidenceNode(
+                shot=VideoShot(index=1, start=0, end=3, duration=3, keyframe_time=1.5),
+                understanding=ShotUnderstanding(
+                    shot_index=1,
+                    visual_summary="产品近景展示",
+                    creative_function_hint="product_intro",
+                    confidence=0.82,
+                    warnings=["shot understanding warning"],
+                ),
+            )
+        ]
+    )
+    ai_template = TemplateStructure(
+        title="AI 拆解模板",
+        script_pattern=[
+            StructureSlot(
+                id="ai_hook",
+                label="AI 钩子",
+                start=0,
+                duration=3,
+                purpose="AI 识别开场",
+                required_asset="产品近景",
+                sample_evidence="第 1 镜证据",
+                evidence_shot_indices=[1],
+                confidence=0.91,
+            )
+        ],
+        rhythm_summary="AI 节奏",
+        packaging_notes=[],
+        analysis_summary=SampleAnalysisSummary(headline="AI 拆解", source="ai", confidence=0.88),
+        shot_evidence_graph=graph,
+    )
+
+    monkeypatch.setattr(
+        "app.main.build_ai_or_fallback_structure_template",
+        lambda *, sample, sample_local_path: ai_template,
+    )
+
+    response = client.post(
+        "/api/runs/demo",
+        json={
+            "sample": {"title": "样例", "duration": 20, "shot_count": 6},
+            "sample_local_path": str(video_path),
+            "use_ai_structure": True,
+            "content": {
+                "topic": "新品短视频",
+                "available_assets": ["产品近景"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["preview"]["shot_evidence_graph"]["shots"][0]["understanding"]["visual_summary"] == "产品近景展示"
+    assert body["preview"]["shot_evidence_graph"]["shots"][0]["understanding"]["warnings"] == [
+        "shot understanding warning"
+    ]
+    assert body["preview"]["shot_evidence_graph"]["warnings"] == ["graph warning"]
 
 
 def test_export_demo_run_package_contains_run_video_request_sheet_and_sources():

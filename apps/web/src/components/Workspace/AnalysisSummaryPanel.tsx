@@ -72,8 +72,8 @@ export default function AnalysisSummaryPanel({ analysis }: { analysis: AnalysisS
 
       {analysis.warnings.length ? (
         <div className="warning-list">
-          {analysis.warnings.map((warning) => (
-            <span key={warning}>{warning}</span>
+          {analysis.warnings.map((warning, index) => (
+            <span key={`analysis-warning-${index}-${warning}`}>{warning}</span>
           ))}
         </div>
       ) : null}
@@ -103,8 +103,8 @@ export default function AnalysisSummaryPanel({ analysis }: { analysis: AnalysisS
 
       {analysis.packagingSignals.length ? (
         <div className="tag-row">
-          {analysis.packagingSignals.map((signal) => (
-            <span key={signal}>{signal}</span>
+          {analysis.packagingSignals.map((signal, index) => (
+            <span key={`packaging-signal-${index}-${signal}`}>{signal}</span>
           ))}
         </div>
       ) : null}

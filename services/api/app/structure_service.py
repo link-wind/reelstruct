@@ -63,6 +63,7 @@ def build_structure_preview(
         template=template,
         transfer_plan=transfer_plan,
         composition=composition,
+        shot_evidence_graph=template.shot_evidence_graph,
     )
 
 

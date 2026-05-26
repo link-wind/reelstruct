@@ -3,6 +3,8 @@ import AnalysisSummaryPanel, { AnalysisSummaryViewModel } from './AnalysisSummar
 import MaterialGapPanel, { MaterialGapViewModel } from './MaterialGapPanel'
 import ResultPreviewPanel, { ResultPreviewViewModel } from './ResultPreviewPanel'
 import SampleAnalysisPanel, { SampleAnalysisViewModel } from './SampleAnalysisPanel'
+import ShotEvidencePanel, { AnalysisUnitViewModel, ShotEvidenceViewModel } from './ShotEvidencePanel'
+import ShotRelationPanel, { ShotRelationViewModel } from './ShotRelationPanel'
 import TargetBriefPanel, { TargetBriefViewModel } from './TargetBriefPanel'
 import TransferExplanationPanel, { TransferExplanationViewModel } from './TransferExplanationPanel'
 
@@ -41,21 +43,28 @@ interface WorkPanelProps {
   onUploadVideo: (file: File) => void
   onUploadMaterialAsset: (slotId: string, file: File) => void
   onGenerate: () => void
+  onGenerateOcrEvidence: () => void
+  onGenerateAsrEvidence: () => void
   canGenerate: boolean
+  canGenerateEvidence: boolean
   isBusy: boolean
   status: string
   error: string
   sampleAnalysis: SampleAnalysisViewModel
   targetBrief: TargetBriefViewModel
   analysis: AnalysisSummaryViewModel | null
+  analysisUnits: AnalysisUnitViewModel[]
+  shotEvidence: ShotEvidenceViewModel[]
+  shotEvidenceWarnings: string[]
+  shotRelations: ShotRelationViewModel[]
   transferExplanations: TransferExplanationViewModel[]
   materialGaps: MaterialGapViewModel[]
   result: ResultPreviewViewModel | null
   progressItems: { label: string; v1: string; v2: string; percent: number }[]
-  mappingItems: { label: string; score: string; percent: number }[]
+  mappingItems: { key: string; label: string; score: string; percent: number }[]
 }
 
-type WorkTab = 'sample' | 'structure' | 'materials' | 'output'
+type WorkTab = 'sample' | 'evidence' | 'structure' | 'materials' | 'output'
 
 export default function WorkPanel({
   stageTitle,
@@ -72,13 +81,20 @@ export default function WorkPanel({
   onUploadVideo,
   onUploadMaterialAsset,
   onGenerate,
+  onGenerateOcrEvidence,
+  onGenerateAsrEvidence,
   canGenerate,
+  canGenerateEvidence,
   isBusy,
   status,
   error,
   sampleAnalysis,
   targetBrief,
   analysis,
+  analysisUnits,
+  shotEvidence,
+  shotEvidenceWarnings,
+  shotRelations,
   transferExplanations,
   materialGaps,
   result,
@@ -91,6 +107,15 @@ export default function WorkPanel({
   const activeNode = nodes.find((node) => node.key === activeNodeKey) || null
   const tabs: Array<{ key: WorkTab; label: string; meta: string }> = [
     { key: 'sample', label: '样例解析', meta: sampleAnalysis.hasUpload ? '已上传' : '待上传' },
+    {
+      key: 'evidence',
+      label: '镜头证据',
+      meta: analysisUnits.length
+        ? `${analysisUnits.length} units`
+        : shotEvidence.length
+          ? `${shotEvidence.length} shots`
+          : '待生成',
+    },
     { key: 'structure', label: '结构拆解', meta: nodes.length ? `${nodes.length} 节点` : '待生成' },
     { key: 'materials', label: '素材补全', meta: materialGaps.length ? `${materialGaps.length} 缺口` : '待检查' },
     { key: 'output', label: '结果验证', meta: result ? '已生成' : '待生成' },
@@ -317,6 +342,21 @@ export default function WorkPanel({
           </div>
         ) : null}
 
+        {activeTab === 'evidence' ? (
+          <div className="tab-panel">
+            <ShotEvidencePanel units={analysisUnits} shots={shotEvidence} warnings={shotEvidenceWarnings} />
+            <div className="evidence-actions">
+              <button className="btn" type="button" onClick={onGenerateOcrEvidence} disabled={!canGenerateEvidence}>
+                生成 OCR 文本
+              </button>
+              <button className="btn" type="button" onClick={onGenerateAsrEvidence} disabled={!canGenerateEvidence}>
+                生成 ASR 口播
+              </button>
+            </div>
+            <ShotRelationPanel relations={shotRelations} />
+          </div>
+        ) : null}
+
         {activeTab === 'materials' ? (
           <div className="tab-panel">
             <div className="lower-grid">
@@ -343,8 +383,8 @@ export default function WorkPanel({
                 <h3>目标素材映射</h3>
                 {mappingItems.length ? (
                   <div id="mappingGrid">
-                    {mappingItems.map((item) => (
-                      <div key={`${item.label}-${item.score}`} className="mapping-item">
+                    {mappingItems.map((item, index) => (
+                      <div key={item.key || `mapping-${index}`} className="mapping-item">
                         <strong>
                           <span>{item.label}</span>
                           <span>{item.score}</span>
