@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import type { WorkspaceRuntimeState } from '../agent/types'
 
 type StructureSlot = {
   id: string
@@ -21,6 +22,90 @@ type StructureSlot = {
   confidence: number
 }
 
+type SlotFillDecision = {
+  slot_id: string
+  decision_type: 'reuse_direct' | 'reuse_with_packaging' | 'caption_only' | 'structure_reorder' | 'shoot_or_aigc'
+  selected_asset_id: string
+  selected_chunk_id: string
+  start: number
+  end: number
+  confidence: number
+  why: string
+  missing: string[]
+  actions: string[]
+  timeline_hint: string
+  evidence_path: string[]
+  timeline_patch_id: string
+}
+
+type SlotQueryProfile = {
+  slot_id: string
+  slot_label: string
+  required_asset: string
+  required_expression: string
+  semantic_terms: string[]
+  visual_terms: string[]
+  action_terms: string[]
+  text_terms: string[]
+  packaging_terms: string[]
+  target_duration: number
+  min_usable_duration: number
+  replacement_modes: Array<'reuse_direct' | 'reuse_with_packaging' | 'caption_only' | 'structure_reorder' | 'shoot_or_aigc'>
+}
+
+type MaterialGraphMatchedNode = {
+  node_id: string
+  node_type: string
+  label: string
+  text: string
+  source_asset_id: string
+  chunk_id: string
+}
+
+type MaterialGraphSearchResult = {
+  slot_id: string
+  asset_id: string
+  chunk_id: string
+  start: number
+  end: number
+  matched_nodes: MaterialGraphMatchedNode[]
+  evidence_path: string[]
+  missing: string[]
+  score_breakdown: Record<string, number>
+  confidence: number
+}
+
+type StructureCoverageResult = {
+  slot_id: string
+  coverage_score: number
+  gap_level: 'low' | 'medium' | 'high'
+  fillability: 'direct' | 'packaging' | 'reorder' | 'missing'
+  summary: string
+}
+
+type TimelineTrackUpdate = {
+  type: 'video' | 'caption' | 'card'
+  action: 'replace' | 'insert' | 'request'
+  text: string
+  duration: number
+  style_hint: string
+}
+
+type TimelinePatch = {
+  patch_id: string
+  slot_id: string
+  operation: 'replace_slot_media' | 'insert_caption_card' | 'request_asset'
+  target_start: number
+  target_end: number
+  execution_summary: string
+  source_asset_id: string
+  source_chunk_id: string
+  source_start: number
+  source_end: number
+  track_updates: TimelineTrackUpdate[]
+  warnings: string[]
+}
+
 type MaterialGap = {
   slot_id: string
   missing_asset: string
@@ -29,6 +114,56 @@ type MaterialGap = {
   suggested_asset_type: string
   suggested_shots: string[]
   pickup_checklist: string[]
+  retrieval_status: '缺失' | '可复用' | '可包装后使用'
+  candidates: MaterialRetrievalCandidate[]
+  retrieval_reason: string
+  primary_supplement: string
+  supplement_options: MaterialSupplementOption[]
+  retrieval_plan: SlotRetrievalPlan
+  slot_fill_decision: SlotFillDecision
+  slot_query_profile: SlotQueryProfile
+  coverage_result: StructureCoverageResult
+  graph_search_results: MaterialGraphSearchResult[]
+  timeline_patches: TimelinePatch[]
+}
+
+type SlotRetrievalPlan = {
+  slot_id: string
+  slot_label: string
+  required_asset: string
+  required_expression: string
+  query_summary: string
+  best_candidate_id: string
+  best_candidate_label: string
+  matched_evidence: string[]
+  missing_evidence: string[]
+  recommended_method: string
+  generation_action: string
+  confidence: number
+}
+
+type MaterialSupplementOption = {
+  method: '现有素材复用' | '文案/字幕补全' | '包装补全' | '结构重排' | '补拍/AIGC'
+  title: string
+  action: string
+  evidence: string[]
+  priority: number
+}
+
+type MaterialRetrievalCandidate = {
+  asset_id: string
+  filename: string
+  source_slot_id: string
+  public_url: string
+  chunk_id: string
+  start: number
+  end: number
+  matched_modalities: string[]
+  evidence: string[]
+  match_score: number
+  score_breakdown: Record<string, number>
+  match_reason: string
+  reuse_strategy: string
 }
 
 type MaterialTaskStatus = '待补拍' | '已拍' | '已交付'
@@ -51,6 +186,30 @@ type MaterialFitAnalysis = {
   recommended_slot_label: string
   recommendation_reason: string
   slot_fit_scores: Record<string, number>
+  visual_summary: string
+  tags: string[]
+  usable_for: string[]
+  embedding_text: string
+  evidence_chunks: MaterialEvidenceChunk[]
+  warnings: string[]
+}
+
+type MaterialEvidenceChunk = {
+  asset_id: string
+  chunk_id: string
+  start: number
+  end: number
+  duration: number
+  frame_urls: string[]
+  ocr_texts: string[]
+  asr_texts: string[]
+  visual_summary: string
+  packaging_signals: string[]
+  subject_tags: string[]
+  action_tags: string[]
+  slot_hints: string[]
+  modalities: string[]
+  embedding_text: string
 }
 
 type UserSlotAsset = {
@@ -108,6 +267,44 @@ type CompositionTrack = {
   asset_public_url: string
 }
 
+type GraphPresentationNode = {
+  id: string
+  label: string
+  node_type: 'segment' | 'unit' | 'shot' | 'text' | 'gap'
+  summary: string
+  shot_indices: number[]
+  confidence: number
+}
+
+type GraphPresentationEdge = {
+  source: string
+  target: string
+  relation: string
+}
+
+type GraphPresentationSummary = {
+  headline: string
+  summary_points: string[]
+  nodes: GraphPresentationNode[]
+  edges: GraphPresentationEdge[]
+}
+
+type ShotEvidenceGraph = {
+  shots: unknown[]
+  analysis_units: unknown[]
+  relations: unknown[]
+  warnings: string[]
+}
+
+type EvaluationSummary = {
+  headline: string
+  highlights: string[]
+  structure_quality: 'low' | 'medium' | 'high'
+  retrieval_quality: 'low' | 'medium' | 'high'
+  completion_quality: 'low' | 'medium' | 'high'
+  result_quality: 'low' | 'medium' | 'high'
+}
+
 type StructurePreviewResponse = {
   template: {
     title: string
@@ -130,6 +327,7 @@ type StructurePreviewResponse = {
       source: 'rule' | 'ai' | 'fallback'
       confidence: number
       warnings: string[]
+      graph_presentation?: GraphPresentationSummary | null
     }
   }
   transfer_plan: {
@@ -147,6 +345,8 @@ type StructurePreviewResponse = {
     duration: number
     tracks: CompositionTrack[]
   }
+  shot_evidence_graph?: ShotEvidenceGraph
+  evaluation_summary: EvaluationSummary
 }
 
 type RenderDemoResponse = {
@@ -186,6 +386,7 @@ type DemoRunResponse = {
   variant: OutputVariant
   note: string
   preview: StructurePreviewResponse
+  evaluation_summary: EvaluationSummary
   prepared_assets: RenderClipPreview[]
   rendered_video: RenderDemoResponse
   trace: RunTraceEvent[]
@@ -408,3 +609,53 @@ const outputVariants: Array<{ value: OutputVariant; label: string }> = [
   { value: 'high_conversion', label: '高转化版' },
   { value: 'fast_rhythm', label: '高节奏版' },
 ]
+
+const API_ORIGIN = process.env.NEXT_PUBLIC_REELSTRUCT_API_ORIGIN || 'http://127.0.0.1:8010'
+
+function apiUrl(path: string): string {
+  if (/^https?:\/\//.test(path)) return path
+  return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+async function requestJson<T>(url: string, options: { method: 'POST'; body: unknown }): Promise<T> {
+  const response = await fetch(apiUrl(url), {
+    method: options.method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(options.body),
+  })
+
+  if (!response.ok) {
+    throw new Error(`请求失败：${response.status} ${await readApiError(response)}`)
+  }
+
+  return response.json() as Promise<T>
+}
+
+async function readApiError(response: Response): Promise<string> {
+  const text = await response.text()
+  if (!text) return response.statusText || '未知错误'
+  try {
+    const payload = JSON.parse(text) as { detail?: unknown }
+    if (typeof payload.detail === 'string') return payload.detail
+  } catch {
+    // Keep the raw response text when the backend does not return JSON.
+  }
+  return text
+}
+
+export async function requestAgentPlan(body: {
+  prompt: string
+  state?: {
+    current_plan?: {
+      prompt: string
+      steps: unknown[]
+    }
+  }
+}): Promise<WorkspaceRuntimeState> {
+  return requestJson<WorkspaceRuntimeState>('/api/agent/plan', {
+    method: 'POST',
+    body,
+  })
+}

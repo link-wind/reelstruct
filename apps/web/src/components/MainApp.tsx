@@ -5,12 +5,20 @@ import Topbar from './Layout/Topbar'
 import HomeView from './Views/HomeView'
 import WorkspaceView from './Views/WorkspaceView'
 import { useReelStruct } from '../hooks/useReelStruct'
+import { useAgentWorkspace } from '../hooks/useAgentWorkspace'
 
 type ViewMode = 'home' | 'workspace'
 
 function WorkspaceRoute({ taskText }: { taskText: string }) {
   const reelStruct = useReelStruct()
-  return <WorkspaceView taskText={taskText} reelStruct={reelStruct} />
+  const agentWorkspace = useAgentWorkspace(taskText)
+
+  return (
+    <WorkspaceView
+      taskText={agentWorkspace.state.currentPlan.prompt || taskText}
+      reelStruct={reelStruct}
+    />
+  )
 }
 
 export default function MainApp() {
