@@ -2,6 +2,8 @@ import pytest
 from pydantic import ValidationError
 
 from app.agent.models import ConfirmationOption, ConfirmationRequest, WorkspaceRuntimeState
+from app.agent.policy import requires_confirmation
+from app.agent.tool_registry import build_default_tool_registry
 
 
 def test_workspace_runtime_state_defaults():
@@ -72,3 +74,61 @@ def test_workspace_runtime_state_default_factories_are_isolated():
     assert second.tool_runs == []
     assert second.warnings == []
     assert second.stage_results == {}
+
+
+def test_registry_build_default_tool_registry_returns_ordered_stage_tools():
+    registry = build_default_tool_registry()
+    registry_by_name = {tool.name: tool for tool in registry}
+
+    assert [tool.name for tool in registry] == [
+        "analyze_structure",
+        "run_ocr",
+        "run_asr",
+        "complete_materials",
+        "generate_result",
+    ]
+    assert [tool.stage for tool in registry] == [
+        "structure",
+        "structure",
+        "structure",
+        "materials",
+        "output",
+    ]
+    assert all(tool.description == "" for tool in registry)
+    assert registry_by_name["analyze_structure"].confirmation_kind == ""
+    assert registry_by_name["run_ocr"].confirmation_kind == "run_ocr"
+    assert registry_by_name["run_asr"].confirmation_kind == "run_asr"
+    assert registry_by_name["complete_materials"].confirmation_kind == "material_strategy"
+    assert registry_by_name["generate_result"].confirmation_kind == "generate_result"
+
+
+def test_registry_confirmation_kinds_match_confirmation_request_contract():
+    registry = build_default_tool_registry()
+
+    for tool in registry:
+        if tool.confirmation_kind:
+            confirmation = ConfirmationRequest(
+                id=f"confirm_{tool.name}",
+                kind=tool.confirmation_kind,
+                title=f"确认 {tool.title}",
+            )
+            assert confirmation.kind == tool.confirmation_kind
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "expected"),
+    [
+        ("run_ocr", True),
+        ("run_asr", True),
+        ("complete_materials", True),
+        ("generate_result", True),
+        ("analyze_structure", False),
+    ],
+)
+def test_registry_requires_confirmation_matches_tool_policy(tool_name: str, expected: bool):
+    assert requires_confirmation(tool_name) is expected
+
+
+def test_registry_requires_confirmation_rejects_unknown_tool():
+    with pytest.raises(ValueError, match="unknown tool: unknown_tool"):
+        requires_confirmation("unknown_tool")
