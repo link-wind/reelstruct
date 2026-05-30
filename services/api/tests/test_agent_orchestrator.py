@@ -1,9 +1,12 @@
 import pytest
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.agent.models import ConfirmationOption, ConfirmationRequest, WorkspaceRuntimeState
+from app.agent.orchestrator import plan_from_prompt
 from app.agent.policy import requires_confirmation
 from app.agent.tool_registry import build_default_tool_registry
+from app.main import app
 
 
 def test_workspace_runtime_state_defaults():
@@ -132,3 +135,63 @@ def test_registry_requires_confirmation_matches_tool_policy(tool_name: str, expe
 def test_registry_requires_confirmation_rejects_unknown_tool():
     with pytest.raises(ValueError, match="unknown tool: unknown_tool"):
         requires_confirmation("unknown_tool")
+
+
+def test_plan_from_prompt_sets_start_confirmation_state():
+    prompt = "先看一下结构，再决定"
+
+    planned = plan_from_prompt(prompt, WorkspaceRuntimeState())
+
+    assert planned.agent_status == "awaiting_start_confirm"
+    assert planned.pending_confirmation is not None
+    assert planned.pending_confirmation.kind == "start_run"
+    assert planned.current_plan.prompt == prompt
+
+
+def test_plan_from_prompt_honors_ocr_and_skip_asr_prompt_rules():
+    prompt = "先看结构和 OCR，不要跑 ASR，再决定是否生成结果"
+
+    planned = plan_from_prompt(prompt, WorkspaceRuntimeState())
+
+    assert [step.tool_name for step in planned.current_plan.steps] == [
+        "analyze_structure",
+        "run_ocr",
+        "complete_materials",
+        "generate_result",
+    ]
+
+
+def test_plan_from_prompt_uses_default_stage_sequence_for_normal_prompt():
+    prompt = "先分析一下这个视频，再给我结果"
+
+    planned = plan_from_prompt(prompt, WorkspaceRuntimeState())
+    tool_names = [step.tool_name for step in planned.current_plan.steps]
+
+    assert "analyze_structure" in tool_names
+    assert "run_asr" in tool_names
+    assert "complete_materials" in tool_names
+    assert "generate_result" in tool_names
+    assert tool_names[0] == "analyze_structure"
+
+
+def test_create_agent_plan_endpoint_returns_workspace_runtime_state():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/plan",
+        json={
+            "prompt": "先看结构和 OCR，不要跑 ASR，再决定是否生成结果",
+            "state": {},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["agent_status"] == "awaiting_start_confirm"
+    assert payload["pending_confirmation"]["kind"] == "start_run"
+    assert [step["tool_name"] for step in payload["current_plan"]["steps"]] == [
+        "analyze_structure",
+        "run_ocr",
+        "complete_materials",
+        "generate_result",
+    ]

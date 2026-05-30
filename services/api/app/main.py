@@ -5,7 +5,10 @@ from uuid import uuid4
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
+from app.agent.models import WorkspaceRuntimeState
+from app.agent.orchestrator import plan_from_prompt
 from app.environment import load_api_env
 from app.fixture_asset_service import build_render_clips_from_composition
 from app.models import (
@@ -97,9 +100,20 @@ app.mount("/keyframes", StaticFiles(directory=str(KEYFRAMES_DIR)), name="keyfram
 app.mount("/materials", StaticFiles(directory=str(MATERIALS_DIR)), name="materials")
 
 
+class AgentPlanRequest(BaseModel):
+    prompt: str
+    state: WorkspaceRuntimeState = Field(default_factory=WorkspaceRuntimeState)
+
+
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/api/agent/plan")
+def create_agent_plan(request: AgentPlanRequest) -> dict:
+    planned_state = plan_from_prompt(request.prompt, request.state)
+    return planned_state.model_dump()
 
 
 @app.post("/api/structure/preview", response_model=StructurePreviewResponse)
