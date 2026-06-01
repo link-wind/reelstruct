@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.models import SampleEvidenceRequest
+from app.api.api_models import SampleEvidenceRequest
 from app.video_understanding.analysis_unit_service import build_analysis_units
 from app.video_understanding.asr_service import transcribe_video_with_asr
 from app.video_understanding.keyframe_service import extract_frame_evidence

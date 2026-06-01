@@ -21,6 +21,81 @@ type StructureSlot = {
   confidence: number
 }
 
+type SlotFillDecision = {
+  slot_id: string
+  decision_type: 'reuse_direct' | 'reuse_with_packaging' | 'caption_only' | 'structure_reorder' | 'shoot_or_aigc'
+  selected_asset_id: string
+  selected_chunk_id: string
+  start: number
+  end: number
+  confidence: number
+  why: string
+  missing: string[]
+  actions: string[]
+  timeline_hint: string
+  evidence_path: string[]
+  timeline_patch_id: string
+}
+
+type SlotQueryProfile = {
+  slot_id: string
+  slot_label: string
+  required_asset: string
+  required_expression: string
+  semantic_terms: string[]
+  visual_terms: string[]
+  action_terms: string[]
+  text_terms: string[]
+  packaging_terms: string[]
+  target_duration: number
+  min_usable_duration: number
+  replacement_modes: Array<'reuse_direct' | 'reuse_with_packaging' | 'caption_only' | 'structure_reorder' | 'shoot_or_aigc'>
+}
+
+type MaterialGraphMatchedNode = {
+  node_id: string
+  node_type: string
+  label: string
+  text: string
+  source_asset_id: string
+  chunk_id: string
+}
+
+type MaterialGraphSearchResult = {
+  slot_id: string
+  asset_id: string
+  chunk_id: string
+  start: number
+  end: number
+  matched_nodes: MaterialGraphMatchedNode[]
+  evidence_path: string[]
+  missing: string[]
+  score_breakdown: Record<string, number>
+  confidence: number
+}
+
+type TimelineTrackUpdate = {
+  type: 'video' | 'caption' | 'card'
+  action: 'replace' | 'insert' | 'request'
+  text: string
+  duration: number
+  style_hint: string
+}
+
+type TimelinePatch = {
+  patch_id: string
+  slot_id: string
+  operation: 'replace_slot_media' | 'insert_caption_card' | 'request_asset'
+  target_start: number
+  target_end: number
+  source_asset_id: string
+  source_chunk_id: string
+  source_start: number
+  source_end: number
+  track_updates: TimelineTrackUpdate[]
+  warnings: string[]
+}
+
 type MaterialGap = {
   slot_id: string
   missing_asset: string
@@ -29,6 +104,55 @@ type MaterialGap = {
   suggested_asset_type: string
   suggested_shots: string[]
   pickup_checklist: string[]
+  retrieval_status: '缺失' | '可复用' | '可包装后使用'
+  candidates: MaterialRetrievalCandidate[]
+  retrieval_reason: string
+  primary_supplement: string
+  supplement_options: MaterialSupplementOption[]
+  retrieval_plan: SlotRetrievalPlan
+  slot_fill_decision: SlotFillDecision
+  slot_query_profile: SlotQueryProfile
+  graph_search_results: MaterialGraphSearchResult[]
+  timeline_patches: TimelinePatch[]
+}
+
+type SlotRetrievalPlan = {
+  slot_id: string
+  slot_label: string
+  required_asset: string
+  required_expression: string
+  query_summary: string
+  best_candidate_id: string
+  best_candidate_label: string
+  matched_evidence: string[]
+  missing_evidence: string[]
+  recommended_method: string
+  generation_action: string
+  confidence: number
+}
+
+type MaterialSupplementOption = {
+  method: '现有素材复用' | '文案/字幕补全' | '包装补全' | '结构重排' | '补拍/AIGC'
+  title: string
+  action: string
+  evidence: string[]
+  priority: number
+}
+
+type MaterialRetrievalCandidate = {
+  asset_id: string
+  filename: string
+  source_slot_id: string
+  public_url: string
+  chunk_id: string
+  start: number
+  end: number
+  matched_modalities: string[]
+  evidence: string[]
+  match_score: number
+  score_breakdown: Record<string, number>
+  match_reason: string
+  reuse_strategy: string
 }
 
 type MaterialTaskStatus = '待补拍' | '已拍' | '已交付'
@@ -36,6 +160,11 @@ type MaterialTaskStatus = '待补拍' | '已拍' | '已交付'
 type MaterialRequestTask = {
   slot_id: string
   status: MaterialTaskStatus
+}
+
+type SupplementSelectionPayload = {
+  slot_id: string
+  method: string
 }
 
 type MaterialRequestSheetItem = {
@@ -51,6 +180,30 @@ type MaterialFitAnalysis = {
   recommended_slot_label: string
   recommendation_reason: string
   slot_fit_scores: Record<string, number>
+  visual_summary: string
+  tags: string[]
+  usable_for: string[]
+  embedding_text: string
+  evidence_chunks: MaterialEvidenceChunk[]
+  warnings: string[]
+}
+
+type MaterialEvidenceChunk = {
+  asset_id: string
+  chunk_id: string
+  start: number
+  end: number
+  duration: number
+  frame_urls: string[]
+  ocr_texts: string[]
+  asr_texts: string[]
+  visual_summary: string
+  packaging_signals: string[]
+  subject_tags: string[]
+  action_tags: string[]
+  slot_hints: string[]
+  modalities: string[]
+  embedding_text: string
 }
 
 type UserSlotAsset = {
@@ -70,6 +223,18 @@ type PackagingPlan = {
   cover_hint: string
 }
 
+type TransferExplanation = {
+  slot_id: string
+  source_observation: string
+  transferable_principle: string
+  target_expression: string
+  asset_plan: string
+  gap_handling: string
+  reasoning: string
+  confidence: number
+  warnings: string[]
+}
+
 type TransferMapping = {
   slot_id: string
   source_label: string
@@ -82,6 +247,7 @@ type TransferMapping = {
   packaging_plan: string
   packaging: PackagingPlan
   fallback_strategy: string
+  explanation?: TransferExplanation
 }
 
 type CompositionTrack = {
@@ -93,6 +259,35 @@ type CompositionTrack = {
   slot_id: string
   asset_local_path: string
   asset_public_url: string
+}
+
+type GraphPresentationNode = {
+  id: string
+  label: string
+  node_type: 'segment' | 'unit' | 'shot' | 'text' | 'gap'
+  summary: string
+  shot_indices: number[]
+  confidence: number
+}
+
+type GraphPresentationEdge = {
+  source: string
+  target: string
+  relation: string
+}
+
+type GraphPresentationSummary = {
+  headline: string
+  summary_points: string[]
+  nodes: GraphPresentationNode[]
+  edges: GraphPresentationEdge[]
+}
+
+type ShotEvidenceGraph = {
+  shots: unknown[]
+  analysis_units: unknown[]
+  relations: unknown[]
+  warnings: string[]
 }
 
 type StructurePreviewResponse = {
@@ -117,6 +312,7 @@ type StructurePreviewResponse = {
       source: 'rule' | 'ai' | 'fallback'
       confidence: number
       warnings: string[]
+      graph_presentation?: GraphPresentationSummary | null
     }
   }
   transfer_plan: {
@@ -134,6 +330,7 @@ type StructurePreviewResponse = {
     duration: number
     tracks: CompositionTrack[]
   }
+  shot_evidence_graph?: ShotEvidenceGraph
 }
 
 type RenderDemoResponse = {
@@ -408,6 +605,7 @@ export default function ReelStructWorkspace() {
   const [requestSheetIds, setRequestSheetIds] = useState<string[]>([])
   const [requestSheetStatus, setRequestSheetStatus] = useState<Record<string, MaterialTaskStatus>>({})
   const [requestSheetFeedback, setRequestSheetFeedback] = useState('')
+  const [supplementSelection, setSupplementSelection] = useState<Record<string, string>>({})
   const [recentRuns, setRecentRuns] = useState<RunRecordSummary[]>([])
   const [runBatch, setRunBatch] = useState<RunBatchResponse | null>(null)
   const [templates, setTemplates] = useState<StructureTemplateSummary[]>([])
@@ -466,8 +664,8 @@ export default function ReelStructWorkspace() {
   }, [gapLookup, preview, requestSheetIds, requestSheetStatus])
 
   const requestSheetText = useMemo(() => {
-    return buildMaterialRequestSheetText(requestSheetItems, requestSheetStatus)
-  }, [requestSheetItems, requestSheetStatus])
+    return buildMaterialRequestSheetText(requestSheetItems, requestSheetStatus, supplementSelection)
+  }, [requestSheetItems, requestSheetStatus, supplementSelection])
 
   const uploadedAssetLookup = useMemo(() => {
     return new Map(content.uploaded_assets.map((asset) => [asset.slot_id, asset]))
@@ -483,6 +681,9 @@ export default function ReelStructWorkspace() {
     setSelectedGapIds(nextGapIds)
     setRequestSheetIds(nextRequestSheet.map((item) => item.slot_id))
     setRequestSheetStatus(Object.fromEntries(nextRequestSheet.map((item) => [item.slot_id, item.status])))
+    setSupplementSelection((current) =>
+      Object.fromEntries(Object.entries(current).filter(([slotId]) => nextGapIds.includes(slotId))),
+    )
     setRequestSheetFeedback('')
   }, [preview])
 
@@ -653,6 +854,7 @@ export default function ReelStructWorkspace() {
           variant: outputVariant,
           mapping_overrides,
           material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
+          supplement_selections: buildSupplementSelectionPayload(supplementSelection),
         },
       })
       setRun(runResponse)
@@ -688,6 +890,7 @@ export default function ReelStructWorkspace() {
           variant: outputVariant,
           mapping_overrides,
           material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
+          supplement_selections: buildSupplementSelectionPayload(supplementSelection),
         },
       })
       const selectedRun = payload.runs.find((item) => item.variant === outputVariant) || payload.runs[0]
@@ -719,6 +922,7 @@ export default function ReelStructWorkspace() {
           template_id: selectedTemplateId,
           mapping_overrides: preview ? buildMappingOverrides(preview, slotDrafts) : [],
           material_request_sheet: buildMaterialRequestSheetPayload(requestSheetIds, requestSheetStatus),
+          supplement_selections: buildSupplementSelectionPayload(supplementSelection),
         },
       })
       setVariantSummaries(payload.variants)
@@ -856,13 +1060,27 @@ export default function ReelStructWorkspace() {
       delete next[slotId]
       return next
     })
+    setSupplementSelection((current) => {
+      const next = { ...current }
+      delete next[slotId]
+      return next
+    })
     setRequestSheetFeedback('已移出任务')
   }
 
   const clearRequestSheet = () => {
     setRequestSheetIds([])
     setRequestSheetStatus({})
+    setSupplementSelection({})
     setRequestSheetFeedback('需求单已清空')
+  }
+
+  const selectSupplementOption = (slotId: string, method: string) => {
+    setSupplementSelection((current) => ({
+      ...current,
+      [slotId]: method,
+    }))
+    setRequestSheetFeedback('补全方案已选择')
   }
 
   const copyRequestSheet = async () => {
@@ -2402,6 +2620,32 @@ export default function ReelStructWorkspace() {
                         </div>
                         <p className="mt-2 text-sm leading-6 text-slate-600">{gap.fill_strategy}</p>
 
+                        {gap.supplement_options.length ? (
+                          <div className="mt-3 grid gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">补全方案</p>
+                            <div className="grid gap-2">
+                              {gap.supplement_options.map((option) => {
+                                const active = supplementSelection[gap.slot_id] === option.method
+                                return (
+                                  <button
+                                    className={
+                                      active
+                                        ? 'rounded-md border border-ink bg-ink px-3 py-2 text-left text-xs text-white'
+                                        : 'rounded-md border border-line bg-white px-3 py-2 text-left text-xs text-slate-700'
+                                    }
+                                    key={`${gap.slot_id}-${option.method}-${option.priority}`}
+                                    onClick={() => selectSupplementOption(gap.slot_id, option.method)}
+                                    type="button"
+                                  >
+                                    <span className="font-semibold">{option.method}：{option.title}</span>
+                                    <span className="mt-1 block leading-5">{option.action}</span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+
                         <div className="mt-3">
                           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">建议镜头</p>
                           <ul className="mt-2 grid gap-2 text-sm leading-6 text-slate-700">
@@ -2557,7 +2801,7 @@ export default function ReelStructWorkspace() {
                         </div>
                         <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">需求摘要</p>
                         <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">
-                          {buildMaterialRequestSheetEntry(item, status)}
+                          {buildMaterialRequestSheetEntry(item, status, supplementSelection[item.task.slot_id])}
                         </p>
                       </article>
                     )
@@ -2716,7 +2960,11 @@ function analysisSourceClass(source: 'rule' | 'ai' | 'fallback'): string {
 
 const materialTaskStatuses: MaterialTaskStatus[] = ['待补拍', '已拍', '已交付']
 
-function buildMaterialRequestSheetEntry(item: MaterialRequestSheetItem, status: MaterialTaskStatus): string {
+function buildMaterialRequestSheetEntry(
+  item: MaterialRequestSheetItem,
+  status: MaterialTaskStatus,
+  selectedMethod?: string,
+): string {
   const gap = item.gap
   if (!gap) {
     return [
@@ -2725,18 +2973,28 @@ function buildMaterialRequestSheetEntry(item: MaterialRequestSheetItem, status: 
       `补位方式：已进入可用素材池，重新生成时直接参与视频重组`,
     ].join('\n')
   }
+  const selectedOption = gap.supplement_options.find((option) => option.method === selectedMethod)
   return [
     `当前状态：${status}`,
     `缺口素材：${gap.missing_asset}`,
     `补位方式：${gap.fill_strategy}`,
+    `首选补全：${gap.primary_supplement || gap.fill_strategy}`,
+    `已选补全：${selectedOption ? `${selectedOption.method}-${selectedOption.action}` : '未选择，默认使用首选补全'}`,
+    `补全方案：${formatSupplementOptions(gap.supplement_options)}`,
     `建议镜头：${gap.suggested_shots.join('；')}`,
     `检查清单：${gap.pickup_checklist.join('；')}`,
   ].join('\n')
 }
 
+function formatSupplementOptions(options: MaterialSupplementOption[]): string {
+  if (!options.length) return '暂无结构化补全方案'
+  return options.map((option) => `${option.method}-${option.action}`).join('；')
+}
+
 function buildMaterialRequestSheetText(
   items: MaterialRequestSheetItem[],
   statusLookup: Record<string, MaterialTaskStatus>,
+  supplementSelection: Record<string, string> = {},
 ): string {
   if (!items.length) return ''
   return [
@@ -2747,7 +3005,7 @@ function buildMaterialRequestSheetText(
       const status = statusLookup[item.task.slot_id] ?? item.task.status
       return [
         `${index + 1}. ${labelForSlot(item.task.slot_id)} / ${item.gap?.suggested_asset_type || item.slot.required_asset}`,
-        buildMaterialRequestSheetEntry(item, status),
+        buildMaterialRequestSheetEntry(item, status, supplementSelection[item.task.slot_id]),
         '',
       ]
     }),
@@ -2762,6 +3020,15 @@ function buildMaterialRequestSheetPayload(
     slot_id: slotId,
     status: statusLookup[slotId] ?? '待补拍',
   }))
+}
+
+function buildSupplementSelectionPayload(selection: Record<string, string>): SupplementSelectionPayload[] {
+  return Object.entries(selection)
+    .filter(([, method]) => method.trim())
+    .map(([slotId, method]) => ({
+      slot_id: slotId,
+      method,
+    }))
 }
 
 function formatRunTime(value: string): string {

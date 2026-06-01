@@ -1,4 +1,5 @@
 import React from 'react'
+import { localizeShotName } from './localize'
 
 export interface ShotRelationViewModel {
   fromShot: number
@@ -14,10 +15,10 @@ export default function ShotRelationPanel({ relations }: { relations: ShotRelati
     <article className="insight-panel soft-card">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Shot relations</p>
+          <p className="eyebrow">镜头关系</p>
           <h3>前后镜头关系</h3>
         </div>
-        <span className="status">{relations.length ? `${relations.length} relations` : '等待生成'}</span>
+        <span className="status">{relations.length ? `${relations.length} 个关系` : '等待生成'}</span>
       </div>
 
       {relations.length ? (
@@ -26,7 +27,7 @@ export default function ShotRelationPanel({ relations }: { relations: ShotRelati
             <section className="transfer-item" key={`${relation.fromShot}-${relation.toShot}-${relation.relationType}`}>
               <div className="transfer-title">
                 <strong>
-                  Shot {relation.fromShot} -&gt; Shot {relation.toShot}
+                  {localizeShotName(relation.fromShot)} → {localizeShotName(relation.toShot)}
                 </strong>
                 <span>{relation.relationType}</span>
               </div>

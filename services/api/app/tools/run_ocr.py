@@ -1,4 +1,4 @@
-from app.models import SampleEvidenceRequest
+from app.api.api_models import SampleEvidenceRequest
 from app.sample_evidence_service import generate_sample_ocr_evidence
 
 

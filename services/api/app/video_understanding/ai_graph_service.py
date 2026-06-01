@@ -18,6 +18,48 @@ MAX_GRAPH_AGGREGATION_ATTEMPTS = 3
 RETRY_SLEEP_SECONDS = 0.4
 RETRYABLE_STATUS_CODES = {408, 409, 429, 500, 502, 503, 504}
 _JSON_FENCE_RE = re.compile(r"^```\s*(?:json)?\s*(?P<body>.*?)\s*```$", re.DOTALL | re.IGNORECASE)
+_ENGLISH_EXPLANATION_RE = re.compile(
+    r"\b("
+    r"Only|Both|available|beat|segment|granularity|coarse|contains|recognition|errors|aggregation|"
+    r"relies|No|explicit|transition|effect|beyond|adjacency|hard\s+cut|inferred|provided|"
+    r"relation|Rhythm|inference|limited|sparse|lacks|support|single-shot|coverage|platform|"
+    r"watermark|account|exact|role|inside|less|motion|timing|uses|features|evidenced|from|"
+    r"opening|ending|obvious|poster|redirect|style|large|bilingual|typography|keyword|"
+    r"display|centered|brand|end-card|dense|multi-zone|layout|blocks|time|location|lines|"
+    r"high|medium|low"
+    r")\b",
+    re.IGNORECASE,
+)
+_USER_FACING_TEXT_KEYS = {
+    "warnings",
+    "evidence",
+    "label",
+    "purpose",
+    "method",
+    "function",
+    "reason",
+    "relation_summary",
+    "rhythm_change",
+    "semantic_shift",
+    "summary",
+    "note",
+    "packaging",
+    "transferable_rule",
+    "non_transferable",
+    "required_asset",
+    "caption_density",
+    "cut_density",
+    "fast_windows",
+    "slow_windows",
+    "peak_position",
+    "slowdown_position",
+    "title_style",
+    "transition_style",
+    "cover_style",
+    "text_layout",
+    "title_cards",
+    "sticker_signals",
+}
 
 
 def parse_graph_segments(payload: Any, graph: Optional[ShotEvidenceGraph] = None) -> GraphAggregationResult:
@@ -33,6 +75,8 @@ def _normalize_graph_payload(payload: Any, *, graph: Optional[ShotEvidenceGraph]
         "relations": _normalize_relations(payload.get("relations")),
         "beats": _normalize_beats(payload.get("beats"), shot_times=shot_times),
         "segments": _normalize_segments(payload.get("segments"), shot_times=shot_times),
+        "rhythm_structure": _normalize_rhythm_structure(payload.get("rhythm_structure")),
+        "packaging_structure": _normalize_packaging_structure(payload.get("packaging_structure")),
         "warnings": _normalize_string_list(payload.get("warnings")),
     }
 
@@ -136,6 +180,92 @@ def _shot_time_lookup(graph: Optional[ShotEvidenceGraph]) -> dict[int, tuple[flo
     if graph is None:
         return {}
     return {node.shot.index: (node.shot.start, node.shot.end) for node in graph.shots}
+
+
+def _normalize_rhythm_structure(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "summary": _coerce_optional_text(value.get("summary")),
+        "avg_shot_duration": _coerce_non_negative_number(value.get("avg_shot_duration"), 0),
+        "cut_density": _coerce_optional_text(value.get("cut_density")),
+        "fast_windows": _normalize_string_list(value.get("fast_windows")),
+        "slow_windows": _normalize_string_list(value.get("slow_windows")),
+        "peak_position": _coerce_optional_text(value.get("peak_position")),
+        "slowdown_position": _coerce_optional_text(value.get("slowdown_position")),
+        "rhythm_curve": _normalize_rhythm_curve(value.get("rhythm_curve")),
+        "segment_notes": _normalize_segment_notes(value.get("segment_notes")),
+    }
+
+
+def _normalize_rhythm_curve(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    points: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        start = _coerce_non_negative_number(item.get("start"), 0)
+        end = _coerce_non_negative_number(item.get("end"), start)
+        points.append(
+            {
+                "start": start,
+                "end": max(end, start),
+                "shot_count": int(_coerce_non_negative_number(item.get("shot_count"), 0)),
+                "density": _coerce_optional_text(item.get("density")),
+                "note": _coerce_optional_text(item.get("note")),
+            }
+        )
+    return points
+
+
+def _normalize_segment_notes(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list):
+        return []
+    notes: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        segment_id = _coerce_optional_text(item.get("segment_id"))
+        note = _coerce_optional_text(item.get("note"))
+        if segment_id or note:
+            notes.append({"segment_id": segment_id, "note": note})
+    return notes
+
+
+def _normalize_packaging_structure(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        "caption_density": _coerce_optional_text(value.get("caption_density")),
+        "title_style": _coerce_optional_text(value.get("title_style")),
+        "transition_style": _coerce_optional_text(value.get("transition_style")),
+        "cover_style": _coerce_optional_text(value.get("cover_style")),
+        "text_layout": _coerce_optional_text(value.get("text_layout")),
+        "title_cards": _normalize_string_list(value.get("title_cards")),
+        "sticker_signals": _normalize_string_list(value.get("sticker_signals")),
+        "packaging_timeline": _normalize_packaging_timeline(value.get("packaging_timeline")),
+    }
+
+
+def _normalize_packaging_timeline(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    items: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        start = _coerce_non_negative_number(item.get("start"), 0)
+        end = _coerce_non_negative_number(item.get("end"), start)
+        items.append(
+            {
+                "start": start,
+                "end": max(end, start),
+                "type": _coerce_optional_text(item.get("type")),
+                "evidence": _coerce_optional_text(item.get("evidence")),
+            }
+        )
+    return items
 
 
 def _infer_time_range(
@@ -260,7 +390,32 @@ def aggregate_graph_structure_with_ai(graph: ShotEvidenceGraph) -> GraphAggregat
 
     with httpx.Client(timeout=OPENAI_TIMEOUT_SECONDS) as client:
         response = _post_with_retries(client=client, api_key=api_key, payload=payload)
+        parsed = _parse_graph_response(response)
+        if _needs_chinese_rewrite(parsed):
+            rewrite_response = _post_with_retries(
+                client=client,
+                api_key=api_key,
+                payload={
+                    "model": model,
+                    "input": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "input_text",
+                                    "text": _build_chinese_rewrite_prompt(parsed),
+                                }
+                            ],
+                        }
+                    ],
+                },
+            )
+            parsed = _parse_graph_response(rewrite_response)
 
+    return parse_graph_segments(parsed, graph=graph)
+
+
+def _parse_graph_response(response: httpx.Response) -> dict[str, Any]:
     try:
         response_data = response.json()
     except json.JSONDecodeError as exc:
@@ -270,8 +425,54 @@ def aggregate_graph_structure_with_ai(graph: ShotEvidenceGraph) -> GraphAggregat
     if not isinstance(output_text, str) or not output_text.strip():
         raise ValueError("OpenAI graph aggregation response missing output_text")
 
-    parsed = _parse_json_output(output_text)
-    return parse_graph_segments(parsed, graph=graph)
+    return _parse_json_output(output_text)
+
+
+def _needs_chinese_rewrite(payload: dict[str, Any]) -> bool:
+    return any(_looks_like_english_explanation(text) for text in _iter_user_facing_text(payload))
+
+
+def _iter_user_facing_text(value: Any, *, current_key: str = ""):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            next_key = str(key)
+            yield from _iter_user_facing_text(item, current_key=next_key)
+        return
+
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, str) and current_key in _USER_FACING_TEXT_KEYS:
+                yield item
+            elif isinstance(item, (dict, list)):
+                yield from _iter_user_facing_text(item, current_key=current_key)
+        return
+
+    if isinstance(value, str) and current_key in _USER_FACING_TEXT_KEYS:
+        yield value
+
+
+def _looks_like_english_explanation(text: str) -> bool:
+    stripped = text.strip()
+    if len(stripped) < 16:
+        return False
+    if not _ENGLISH_EXPLANATION_RE.search(stripped):
+        return False
+    latin_letters = len(re.findall(r"[A-Za-z]", stripped))
+    return latin_letters >= 8
+
+
+def _build_chinese_rewrite_prompt(payload: dict[str, Any]) -> str:
+    return (
+        "请把以下 JSON 中面向用户展示的英文说明改写为简体中文。"
+        "必须保持严格 JSON 输出，不要 markdown，不要解释。"
+        "JSON 字段名、层级结构、id、shot/unit 编号、时间、置信度、数组顺序都必须保持不变。"
+        "只改写自然语言说明字段，例如 warnings、label、purpose、method、evidence、function、reason、"
+        "relation_summary、rhythm_change、semantic_shift、summary、note、packaging、transferable_rule、"
+        "non_transferable、required_asset、title_style、transition_style、cover_style、text_layout。"
+        "如果 OCR/ASR 或画面证据中本来就包含英文原文，可以保留原文，但解释性句子必须使用简体中文。"
+        "不要新增事实，不要删除证据，不要把字段名翻译成中文。"
+        f"\n待改写 JSON：\n{json.dumps(payload, ensure_ascii=False)}"
+    )
 
 
 def _post_with_retries(
@@ -324,12 +525,28 @@ def _build_graph_prompt(graph: ShotEvidenceGraph) -> str:
         "你是 ReelStruct 的 Shot Evidence Graph 聚合器。"
         "只能基于输入的 Shot Evidence Graph 做关系、节拍和段落聚合，不要引入外部知识，不要补写图中没有的事实。"
         "只输出严格 JSON，不要 markdown，不要解释文字。"
-        "顶层字段必须且只允许包含：relations, beats, segments, warnings。"
+        "JSON 字段名保持英文，但所有自然语言字段的值必须使用简体中文。"
+        "label、purpose、method、evidence、function、reason、relation_summary、rhythm_change、semantic_shift、"
+        "summary、note、packaging、transferable_rule、non_transferable、required_asset、title_style、"
+        "transition_style、cover_style、text_layout、warnings 等字段的值都必须用中文表达。"
+        "禁止输出英文标签，例如 Opening beat、solid blue transition card、adjacent cut；无法判断时写“证据不足”。"
+        "warnings 禁止输出英文整句，例如 Only 2 shots are available、Both segments are single-shot segments、"
+        "No ASR support、Transition style beyond adjacency/hard cut；必须改写成简体中文。"
+        "顶层字段必须且只允许包含：relations, beats, segments, rhythm_structure, packaging_structure, warnings。"
         "relations 必须描述 shot 与 shot 的关系，字段必须使用 relation_type，不要使用 type。"
         "beats 必须表示创作节拍，字段必须使用 beat_id，不要使用 beat_index；shot_indices 必须来自输入图。"
         "segments 必须基于图中的证据聚合，字段必须使用 segment_id，不要使用 segment_index。"
         "segment.evidence 必须是字符串数组，每一项逐条引用输入中的证据或说明它来自哪里，不要输出对象数组。"
+        "evidence 和 warnings 面向用户展示，不能输出 analysis_units.unit_1.understanding.visual_summary "
+        "这类原始 JSON 路径；应写成“分析单元 1 的画面理解”“分析单元 1 的包装信号”等中文表达。"
         "beats 和 segments 都必须输出 start 与 end；如果证据不足，应基于覆盖的 shot 起止时间保守填写。"
+        "rhythm_structure 必须描述节奏结构，字段包含 summary, avg_shot_duration, cut_density, fast_windows, "
+        "slow_windows, peak_position, slowdown_position, rhythm_curve, segment_notes；"
+        "rhythm_curve 每项包含 start, end, shot_count, density, note。"
+        "packaging_structure 必须描述包装结构，字段包含 caption_density, title_style, transition_style, "
+        "cover_style, text_layout, title_cards, sticker_signals, packaging_timeline；"
+        "packaging_timeline 每项包含 start, end, type, evidence。"
+        "包装判断必须引用 OCR、ASR、shot/unit understanding 或可见 packaging_signals。"
         "不要编造新的证据，不要把抽象判断当作证据。"
         "warnings 只能写关于图聚合质量、证据缺口、覆盖不足、关系不明确之类的提醒。"
         f"\n输入 Shot Evidence Graph 如下：\n{json.dumps(graph_payload, ensure_ascii=False)}"

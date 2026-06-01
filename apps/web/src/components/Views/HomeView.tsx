@@ -23,7 +23,7 @@ export default function HomeView({ onStartMigration }: HomeViewProps) {
           <p className="eyebrow">产品入口</p>
           <h1>把参考视频变成可执行剪辑结构。</h1>
           <p className="home-lead">
-            输入一句任务，直接进入工作台开始拆解结构、映射素材和输出迁移计划。
+            输入一句任务后先进入工作台，上传参考视频，再由 agent 开始拆解结构、映射素材和输出迁移计划。
           </p>
         </div>
 
@@ -31,7 +31,7 @@ export default function HomeView({ onStartMigration }: HomeViewProps) {
           <textarea
             id="homePrompt"
             aria-label="输入视频结构迁移任务"
-            placeholder="分析这个 42 秒参考广告的节奏，把 Hook、痛点、演示、证明和 CTA 迁移到我上传的产品素材里，目标输出 35 秒竖版短视频。"
+            placeholder="分析这个 42 秒参考广告的节奏，把开头钩子、痛点、演示、证明和行动引导迁移到我上传的产品素材里，目标输出 35 秒竖版短视频。"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
           ></textarea>
@@ -47,7 +47,7 @@ export default function HomeView({ onStartMigration }: HomeViewProps) {
           <button
             className="example"
             type="button"
-            onClick={() => handleExampleClick("把参考视频的五段式结构迁移到新品演示素材里，保留 2 秒 Hook 和轻 CTA。")}
+            onClick={() => handleExampleClick("把参考视频的五段式结构迁移到新品演示素材里，保留 2 秒开头钩子和轻行动引导。")}
           >
             五段式广告迁移
           </button>

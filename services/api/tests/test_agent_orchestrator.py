@@ -145,6 +145,10 @@ def test_plan_from_prompt_sets_start_confirmation_state():
     assert planned.agent_status == "awaiting_start_confirm"
     assert planned.pending_confirmation is not None
     assert planned.pending_confirmation.kind == "start_run"
+    assert [option.action for option in planned.pending_confirmation.options] == [
+        "continue",
+        "pause",
+    ]
     assert planned.current_plan.prompt == prompt
 
 
@@ -174,6 +178,36 @@ def test_plan_from_prompt_uses_default_stage_sequence_for_normal_prompt():
     assert tool_names[0] == "analyze_structure"
 
 
+def test_plan_from_prompt_returns_clean_runtime_state_without_execution_residue():
+    prompt = "先看一下结构，再决定"
+    dirty_state = WorkspaceRuntimeState(
+        agent_status="running",
+        current_step="run_ocr",
+        pending_confirmation=ConfirmationRequest(
+            id="confirm_old",
+            kind="run_ocr",
+            title="旧确认",
+        ),
+        tool_runs=[{"id": "tool_1", "tool_name": "run_ocr", "status": "completed"}],
+        stage_results={"ocr": {"status": "completed"}},
+        warnings=["old warning"],
+        errors=["old error"],
+        skip_reasons=["old skip"],
+    )
+
+    planned = plan_from_prompt(prompt, dirty_state)
+
+    assert planned.agent_status == "awaiting_start_confirm"
+    assert planned.current_step == ""
+    assert planned.tool_runs == []
+    assert planned.stage_results == {}
+    assert planned.warnings == []
+    assert planned.errors == []
+    assert planned.skip_reasons == []
+    assert planned.pending_confirmation is not None
+    assert planned.pending_confirmation.kind == "start_run"
+
+
 def test_create_agent_plan_endpoint_returns_workspace_runtime_state():
     client = TestClient(app)
 
@@ -195,3 +229,124 @@ def test_create_agent_plan_endpoint_returns_workspace_runtime_state():
         "complete_materials",
         "generate_result",
     ]
+
+
+def test_create_agent_plan_endpoint_drops_old_runtime_residue_from_input_state():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/plan",
+        json={
+            "prompt": "先分析一下这个视频，再给我结果",
+            "state": {
+                "current_plan": {"prompt": "old prompt", "steps": []},
+                "tool_runs": [{"id": "tool_1", "tool_name": "run_ocr"}],
+                "errors": ["old error"],
+                "stage_results": {"ocr": {"status": "completed"}},
+            },
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_agent_plan_endpoint_rejects_unknown_top_level_fields():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/plan",
+        json={
+            "prompt": "先分析一下这个视频，再给我结果",
+            "unexpected": True,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_agent_plan_endpoint_rejects_unknown_nested_state_fields():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/plan",
+        json={
+            "prompt": "先分析一下这个视频，再给我结果",
+            "state": {
+                "current_plan": {"prompt": "old prompt", "steps": []},
+                "tool_runs": [],
+            },
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_execute_agent_tool_endpoint_runs_analyze_structure():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/tools/execute",
+        json={
+            "tool_name": "analyze_structure",
+            "payload": {
+                "sample": {
+                    "title": "护肤样例",
+                    "duration": 18,
+                    "shot_count": 5,
+                    "transcript_summary": "开头展示前后对比，中段讲补水效果，结尾引导下单。",
+                },
+                "content": {
+                    "topic": "保湿精华短视频",
+                    "product_name": "清透保湿精华",
+                    "selling_points": ["快速补水", "清爽不黏"],
+                    "available_assets": ["开头吸引镜头", "使用过程镜头"],
+                },
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tool_name"] == "analyze_structure"
+    assert payload["stage"] == "structure"
+    assert payload["data"]["preview"]["transfer_plan"]["title"] == "清透保湿精华 结构迁移方案"
+
+
+def test_execute_agent_tool_endpoint_rejects_unknown_tool():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/tools/execute",
+        json={
+            "tool_name": "unknown_tool",
+            "payload": {},
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "unknown tool: unknown_tool"
+
+
+def test_execute_agent_tool_endpoint_returns_422_for_invalid_tool_payload():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/tools/execute",
+        json={
+            "tool_name": "analyze_structure",
+            "payload": {
+                "sample": {
+                    "title": "护肤样例",
+                    "duration": 18,
+                    "shot_count": 5,
+                },
+                "content": {
+                    "topic": "保湿精华短视频",
+                },
+                "unexpected": True,
+            },
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["unexpected"]

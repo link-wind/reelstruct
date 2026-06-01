@@ -12,7 +12,7 @@ export default function TargetBriefPanel({ brief }: { brief: TargetBriefViewMode
     <article className="insight-panel soft-card">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Target brief</p>
+          <p className="eyebrow">目标简报</p>
           <h3>目标内容</h3>
         </div>
         <span className="status">{brief.productName || '待补充'}</span>

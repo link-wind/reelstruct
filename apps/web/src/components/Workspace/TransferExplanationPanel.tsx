@@ -17,12 +17,20 @@ export interface TransferExplanationViewModel {
   warnings: string[]
 }
 
-export default function TransferExplanationPanel({ explanations }: { explanations: TransferExplanationViewModel[] }) {
+export default function TransferExplanationPanel({
+  explanations,
+  framed = true,
+}: {
+  explanations: TransferExplanationViewModel[]
+  framed?: boolean
+}) {
+  const rootClassName = framed ? 'insight-panel soft-card' : 'insight-panel insight-panel-inline'
+
   return (
-    <article className="insight-panel soft-card">
+    <article className={rootClassName}>
       <div className="section-head">
         <div>
-          <p className="eyebrow">Transfer logic</p>
+          <p className="eyebrow">迁移逻辑</p>
           <h3>迁移解释</h3>
         </div>
         <span className="status">{explanations.length ? `${explanations.length} 个节点` : '等待生成'}</span>
@@ -67,7 +75,7 @@ export default function TransferExplanationPanel({ explanations }: { explanation
       ) : (
         <div className="empty-state">
           <strong>还没有迁移解释</strong>
-          <span>生成结构后，这里会展示“样例方法 {'->'} 新内容表达 {'->'} 素材支撑”的映射过程。</span>
+          <span>生成结构后，这里会展示“样例方法 → 新内容表达 → 素材支撑”的映射过程。</span>
         </div>
       )}
     </article>

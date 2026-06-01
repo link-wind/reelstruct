@@ -34,10 +34,10 @@ export default function AgentActionPanel({
   }
 
   return (
-    <aside className="agent-panel soft-card" aria-label="Agent 对话区">
+    <aside className="agent-panel soft-card" aria-label="智能助手对话区">
       <div className="panel-head">
         <div>
-          <p className="eyebrow">Agent</p>
+          <p className="eyebrow">智能助手</p>
           <h2>结构迁移对话</h2>
           <p>记录任务、补充约束，并展示真实接口状态。</p>
         </div>
@@ -81,8 +81,8 @@ export default function AgentActionPanel({
       <form className="composer" id="chatForm" onSubmit={handleSubmit}>
         <textarea
           id="chatInput"
-          aria-label="继续向 Agent 输入指令"
-          placeholder="例如：缩短 Hook，保留参考片字幕节奏，不要使用纯 UI B-roll。"
+          aria-label="继续向智能助手输入指令"
+          placeholder="例如：缩短开头钩子，保留参考片字幕节奏，不要使用纯界面补充镜头。"
           value={inputStr}
           onChange={(event) => setInputStr(event.target.value)}
           onKeyDown={(event) => {

@@ -27,7 +27,7 @@ export interface ResultPreviewViewModel {
 
 function assetSourceLabel(sourceType: string) {
   if (sourceType === 'uploaded') return '用户上传'
-  if (sourceType === 'fixture') return 'fixture 匹配'
+  if (sourceType === 'fixture') return '样例素材匹配'
   return sourceType || '未知来源'
 }
 
@@ -48,7 +48,7 @@ export default function ResultPreviewPanel({ result }: { result: ResultPreviewVi
     <article className="insight-panel soft-card">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Output</p>
+          <p className="eyebrow">结果输出</p>
           <h3>结果验证</h3>
         </div>
         <span className="status">{result?.runId || '等待生成'}</span>
@@ -58,12 +58,12 @@ export default function ResultPreviewPanel({ result }: { result: ResultPreviewVi
         <div className="result-preview-grid">
           <video className="result-video" src={result.videoUrl} controls preload="metadata" />
           <div className="result-meta">
-            <p>Run: {result.runId}</p>
-            <p>Batch: {result.batchId || '-'}</p>
+            <p>任务编号：{result.runId}</p>
+            <p>批次编号：{result.batchId || '-'}</p>
             <p>素材片段: {result.assets.length}</p>
             <div className="source-summary">
               <span>用户上传 {uploadedCount}</span>
-              <span>fixture 匹配 {fixtureCount}</span>
+              <span>样例素材匹配 {fixtureCount}</span>
             </div>
             <a className="btn" href={apiUrl(`/api/runs/${result.runId}/export.zip`)}>
               下载结果包
@@ -72,8 +72,8 @@ export default function ResultPreviewPanel({ result }: { result: ResultPreviewVi
         </div>
       ) : (
         <div className="empty-state">
-          <strong>还没有成片 demo</strong>
-          <span>点击生成结构后，后端会渲染 MP4 demo，并标明每段素材来自用户上传还是 fixture 匹配。</span>
+          <strong>还没有成片样片</strong>
+          <span>点击生成结构后，后端会渲染 MP4 样片，并标明每段素材来自用户上传还是样例素材匹配。</span>
         </div>
       )}
 
@@ -86,7 +86,7 @@ export default function ResultPreviewPanel({ result }: { result: ResultPreviewVi
           {result.assets.map((asset) => (
             <div className="asset-row" key={`${asset.sceneId}-${asset.sourceLabel}`}>
               <div>
-                <strong>{asset.sceneId || 'segment'}</strong>
+                <strong>{asset.sceneId || '段落'}</strong>
                 <span>{asset.sourceLabel || asset.sourceType}</span>
                 {asset.caption ? <p>{asset.caption}</p> : null}
               </div>

@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -57,6 +57,21 @@ class ToolRunRecord(BaseModel):
     tool_name: str
     status: Literal["pending", "running", "completed", "skipped", "failed"] = "pending"
     summary: str = ""
+
+
+class AgentToolExecuteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool_name: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentToolExecuteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool_name: str
+    stage: str
+    data: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkspaceRuntimeState(BaseModel):

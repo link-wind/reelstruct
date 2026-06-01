@@ -51,7 +51,7 @@ export default function SampleAnalysisPanel({ sample }: { sample: SampleAnalysis
       <article className="insight-panel soft-card">
         <div className="section-head">
           <div>
-            <p className="eyebrow">Sample analysis</p>
+            <p className="eyebrow">样例解析</p>
             <h3>样例解析概览</h3>
           </div>
           <span className="status">等待上传</span>
@@ -68,7 +68,7 @@ export default function SampleAnalysisPanel({ sample }: { sample: SampleAnalysis
     <article className="insight-panel soft-card">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Sample analysis</p>
+          <p className="eyebrow">样例解析</p>
           <h3>样例解析概览</h3>
         </div>
         <span className="status">{sample.filename || sample.title}</span>
@@ -100,7 +100,7 @@ export default function SampleAnalysisPanel({ sample }: { sample: SampleAnalysis
         <div className="metric-item">
           <span>分辨率 / FPS</span>
           <strong>{sample.resolution || '-'}</strong>
-          <p>{formatNumber(sample.fps)} fps</p>
+          <p>{formatNumber(sample.fps)} 帧/秒</p>
         </div>
         <div className="metric-item">
           <span>平均镜头</span>
@@ -123,9 +123,9 @@ export default function SampleAnalysisPanel({ sample }: { sample: SampleAnalysis
         <div className="keyframe-grid">
           {sample.keyframes.map((keyframe) => (
             <figure key={`${keyframe.shotIndex}-${keyframe.keyframeTime}`}>
-              <img src={keyframe.publicUrl} alt={`Shot ${keyframe.shotIndex}`} />
+              <img src={keyframe.publicUrl} alt={`镜头 ${keyframe.shotIndex}`} />
               <figcaption>
-                Shot {keyframe.shotIndex} · {formatNumber(keyframe.keyframeTime, 's')}
+                镜头 {keyframe.shotIndex} · {formatNumber(keyframe.keyframeTime, 's')}
               </figcaption>
             </figure>
           ))}

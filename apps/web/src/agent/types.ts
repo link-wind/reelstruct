@@ -17,6 +17,8 @@ export type ConfirmationKind =
   | "material_strategy"
   | "generate_result"
 
+export type ToolConfirmationKind = Exclude<ConfirmationKind, "start_run">
+
 export type ConfirmationOption = {
   id: string
   label: string

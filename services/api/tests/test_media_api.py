@@ -1,6 +1,10 @@
 from fastapi.testclient import TestClient
 from pathlib import Path
 
+from app.material_asset_service import analyze_material_fit, enrich_material_analysis_with_video_evidence
+from app.material_evidence_service import build_material_evidence_chunks_from_video
+from app.models import MaterialEvidenceChunk, MaterialFitAnalysis
+from app.video_understanding.schemas import FrameEvidence, FrameOCRText
 from app.video_understanding.schemas import VideoMetadata, VideoShot, VideoSignal
 from app.main import app
 
@@ -22,7 +26,16 @@ def test_upload_material_asset_returns_slot_bound_asset():
     assert body["local_path"].endswith(body["filename"])
 
 
-def test_upload_material_asset_returns_fit_analysis_for_recommended_slot():
+def test_upload_material_asset_returns_fit_analysis_for_recommended_slot(monkeypatch):
+    monkeypatch.setenv("REELSTRUCT_OCR_ENABLED", "false")
+    called = False
+
+    def fake_video_evidence(*args, **kwargs):
+        nonlocal called
+        called = True
+        return []
+
+    monkeypatch.setattr("app.material_asset_service.build_material_evidence_chunks_from_video", fake_video_evidence)
     client = TestClient(app)
     fixture_path = Path(__file__).resolve().parents[3] / "fixtures" / "vid_001.mp4"
 
@@ -41,6 +54,256 @@ def test_upload_material_asset_returns_fit_analysis_for_recommended_slot():
     assert analysis["shot_count"] >= 1
     assert "短镜头" in analysis["recommendation_reason"]
     assert "hook" in analysis["slot_fit_scores"]
+    assert called is False
+    assert any("等待生成真实素材证据" in warning for warning in analysis["warnings"])
+
+
+def test_analyze_material_fit_returns_searchable_understanding_card(monkeypatch, tmp_path):
+    material_path = tmp_path / "product-detail-closeup.mp4"
+    material_path.write_bytes(b"fake video")
+    monkeypatch.setattr("app.material_asset_service.probe_video_duration", lambda path: 6.2)
+    monkeypatch.setattr("app.material_asset_service.detect_shot_count", lambda path: 3)
+
+    analysis = analyze_material_fit(material_path)
+
+    assert analysis.visual_summary
+    assert "product" in analysis.embedding_text
+    assert "detail" in analysis.embedding_text
+    assert "closeup" in analysis.embedding_text
+    assert analysis.tags
+    assert "卖点展开" in analysis.usable_for
+
+
+def test_analyze_material_fit_returns_evidence_chunks(monkeypatch, tmp_path):
+    material_path = tmp_path / "product-detail-closeup.mp4"
+    material_path.write_bytes(b"fake video")
+    monkeypatch.setattr("app.material_asset_service.probe_video_duration", lambda path: 6.2)
+    monkeypatch.setattr("app.material_asset_service.detect_shot_count", lambda path: 3)
+
+    analysis = analyze_material_fit(material_path)
+
+    assert analysis.evidence_chunks
+    chunk = analysis.evidence_chunks[0]
+    assert chunk.chunk_id == "chunk_1"
+    assert chunk.start == 0
+    assert chunk.end > chunk.start
+    assert "product" in chunk.embedding_text
+    assert "visual" in chunk.modalities
+    assert "卖点展开" in chunk.slot_hints
+
+
+def test_build_material_evidence_chunks_from_video_uses_frames_and_ocr(monkeypatch, tmp_path):
+    material_path = tmp_path / "detail.mp4"
+    material_path.write_bytes(b"fake video")
+    shots = [
+        VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1),
+        VideoShot(index=2, start=2, end=5, duration=3, keyframe_time=3.5),
+    ]
+    video_signal = VideoSignal(
+        metadata=VideoMetadata(duration=5, fps=30, width=1080, height=1920, format_name="mp4"),
+        shot_count=2,
+        shots=shots,
+    )
+    analysis = MaterialFitAnalysis(
+        duration=5,
+        shot_count=2,
+        recommended_slot_id="selling_points",
+        recommended_slot_label="卖点展开",
+        visual_summary="产品瓶身细节特写。",
+        tags=["产品", "特写"],
+        usable_for=["卖点展开"],
+        embedding_text="产品 瓶身 特写 快速补水 卖点展开",
+    )
+
+    monkeypatch.setattr("app.material_evidence_service.detect_video_signal", lambda path: video_signal)
+    monkeypatch.setattr(
+        "app.material_evidence_service.extract_frame_evidence",
+        lambda video_path, received_shots, *, output_dir, public_prefix: [
+            FrameEvidence(
+                shot_index=1,
+                frame_index=1,
+                time=1,
+                role="middle",
+                local_path=str(tmp_path / "frame.jpg"),
+                public_url="/keyframes/materials/detail/frame.jpg",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        "app.material_evidence_service.recognize_frames_with_ocr",
+        lambda frames: type(
+            "OCRResult",
+            (),
+            {
+                "texts": [
+                    FrameOCRText(
+                        shot_index=1,
+                        frame_index=1,
+                        frame_time=1,
+                        text="快速补水",
+                        confidence=0.95,
+                    )
+                ],
+                "warnings": [],
+            },
+        )(),
+    )
+
+    chunks = build_material_evidence_chunks_from_video(
+        material_path,
+        asset_id="detail.mp4",
+        analysis=analysis,
+        output_dir=tmp_path / "evidence",
+        public_prefix="/keyframes/materials/detail",
+    )
+
+    assert len(chunks) == 2
+    assert chunks[0].frame_urls == ["/keyframes/materials/detail/frame.jpg"]
+    assert chunks[0].ocr_texts == ["快速补水"]
+    assert "ocr" in chunks[0].modalities
+    assert "快速补水" in chunks[0].embedding_text
+
+
+def test_material_evidence_endpoint_generates_real_chunks(monkeypatch, tmp_path):
+    client = TestClient(app)
+    material_path = tmp_path / "detail.mp4"
+    material_path.write_bytes(b"fake video")
+    indexed_assets = []
+
+    monkeypatch.setattr("app.main.MATERIALS_DIR", tmp_path)
+    monkeypatch.setattr("app.main.index_material_asset", lambda asset: indexed_assets.append(asset))
+    monkeypatch.setattr(
+        "app.main.enrich_material_analysis_with_video_evidence",
+            lambda path, *, analysis, evidence_dir, evidence_public_prefix, strict=False: analysis.model_copy(
+            update={
+                "warnings": ["真实素材证据已生成"],
+                "evidence_chunks": [
+                    MaterialEvidenceChunk(
+                        asset_id=path.name,
+                        chunk_id="shot_1",
+                        start=0,
+                        end=2,
+                        duration=2,
+                        frame_urls=["/materials/detail-evidence/frame.jpg"],
+                        ocr_texts=["快速补水"],
+                        visual_summary="产品瓶身特写。",
+                        slot_hints=["卖点展开"],
+                        modalities=["visual", "ocr", "slot"],
+                        embedding_text="产品瓶身特写 快速补水 卖点展开",
+                    )
+                ],
+            }
+        ),
+    )
+
+    response = client.post(
+        "/api/materials/evidence",
+        json={
+            "slot_id": "material_pool",
+            "filename": "detail.mp4",
+            "local_path": str(material_path),
+            "public_url": "/materials/detail.mp4",
+            "analysis": {
+                "duration": 2,
+                "shot_count": 1,
+                "recommended_slot_id": "selling_points",
+                "recommended_slot_label": "卖点展开",
+                "recommendation_reason": "产品细节素材。",
+                "slot_fit_scores": {"selling_points": 90},
+                "visual_summary": "产品细节素材。",
+                "tags": ["产品"],
+                "usable_for": ["卖点展开"],
+                "embedding_text": "产品 快速补水",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    analysis = response.json()["analysis"]
+    assert analysis["evidence_chunks"][0]["frame_urls"] == ["/materials/detail-evidence/frame.jpg"]
+    assert analysis["evidence_chunks"][0]["ocr_texts"] == ["快速补水"]
+    assert "真实素材证据已生成" in analysis["warnings"]
+    assert indexed_assets
+    assert indexed_assets[0].analysis.evidence_chunks[0].chunk_id == "shot_1"
+
+
+def test_enrich_material_analysis_replaces_waiting_warning_after_real_evidence(monkeypatch, tmp_path):
+    material_path = tmp_path / "detail.mp4"
+    material_path.write_bytes(b"fake video")
+    analysis = MaterialFitAnalysis(
+        duration=2,
+        shot_count=1,
+        warnings=["等待生成真实素材证据：当前为轻量素材理解卡。"],
+    )
+    monkeypatch.setattr(
+        "app.material_asset_service.build_material_evidence_chunks_from_video",
+        lambda *args, **kwargs: [
+            MaterialEvidenceChunk(
+                asset_id="detail.mp4",
+                chunk_id="shot_1",
+                start=0,
+                end=2,
+                duration=2,
+                visual_summary="产品瓶身特写。",
+                modalities=["visual"],
+                embedding_text="产品瓶身特写",
+            )
+        ],
+    )
+
+    enriched = enrich_material_analysis_with_video_evidence(
+        material_path,
+        analysis=analysis,
+        evidence_dir=tmp_path / "evidence",
+        evidence_public_prefix="/materials/detail-evidence",
+        strict=True,
+    )
+
+    assert enriched.evidence_chunks[0].chunk_id == "shot_1"
+    assert all("等待生成真实素材证据" not in warning for warning in enriched.warnings)
+    assert "真实素材证据已生成" in enriched.warnings
+
+
+def test_material_evidence_endpoint_returns_400_when_generation_fails(monkeypatch, tmp_path):
+    client = TestClient(app, raise_server_exceptions=False)
+    material_path = tmp_path / "detail.mp4"
+    material_path.write_bytes(b"fake video")
+
+    monkeypatch.setattr("app.main.MATERIALS_DIR", tmp_path)
+
+    def fail_generation(*args, **kwargs):
+        raise RuntimeError("ffmpeg failed")
+
+    monkeypatch.setattr("app.main.enrich_material_analysis_with_video_evidence", fail_generation)
+
+    response = client.post(
+        "/api/materials/evidence",
+        json={
+            "slot_id": "material_pool",
+            "filename": "detail.mp4",
+            "local_path": str(material_path),
+            "public_url": "/materials/detail.mp4",
+            "analysis": {
+                "duration": 2,
+                "shot_count": 1,
+                "recommended_slot_id": "selling_points",
+                "recommended_slot_label": "卖点展开",
+                "slot_fit_scores": {"selling_points": 90},
+                "evidence_chunks": [
+                    {
+                        "asset_id": "detail.mp4",
+                        "chunk_id": "chunk_1",
+                        "start": 0,
+                        "end": 2,
+                        "duration": 2,
+                    }
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 400
+    assert "素材证据生成失败" in response.json()["detail"]
 
 
 def test_prepare_demo_assets_endpoint_returns_render_clips():

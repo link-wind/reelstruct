@@ -1,4 +1,4 @@
-from app.models import PreviewRunRequest
+from app.api.api_models import PreviewRunRequest
 from app.workflow_service import create_demo_run_from_preview
 
 

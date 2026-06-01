@@ -64,7 +64,7 @@ def decompose_video_structure_with_ai(
     if not isinstance(output_text, str) or not output_text.strip():
         raise ValueError("OpenAI structure response missing output_text")
 
-    parsed = _parse_json_output(output_text)
+    parsed = _normalize_structure_output(_parse_json_output(output_text))
     try:
         return AIStructureAnalysis.model_validate(parsed)
     except Exception as exc:
@@ -82,6 +82,9 @@ def _build_prompt(title: str, signal: VideoSignal, evidence: list[ShotEvidence],
         "你是短视频结构拆解专家。请基于真实视频证据拆解创作结构，不要套固定四段模板。\n"
         "你的任务是总结这条样例视频的结构组织方式，让后续系统可以迁移方法，但不能照抄具体商品信息。\n"
         "请输出严格 JSON，不要输出 markdown，不要输出解释文字。\n"
+        "JSON 字段名保持英文，但所有自然语言字段的值必须使用简体中文；只有 source 可以等于 ai。\n"
+        "label、type、purpose、method、evidence、rhythm、packaging、required_asset、transferable_rule、non_transferable、warnings 等值都必须中文。\n"
+        "禁止输出英文标签，例如 Hook、Opening、CTA、title card；无法判断时写“证据不足”。\n"
         "顶层字段必须且只允许包含：source, headline, segments, rhythm_structure, packaging_structure, confidence, warnings。\n"
         "source 必须等于 ai。segments 必须是非空数组。\n"
         "每个 segment 必须包含：id, label, type, start, end, shot_indices, purpose, method, evidence, rhythm, packaging, required_asset, transferable_rule, non_transferable, confidence。\n"
@@ -107,6 +110,26 @@ def _parse_json_output(output_text: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("OpenAI structure output JSON must be an object")
     return parsed
+
+
+def _normalize_structure_output(parsed: dict[str, Any]) -> dict[str, Any]:
+    segments = parsed.get("segments")
+    if not isinstance(segments, list):
+        return parsed
+
+    normalized_segments: list[dict[str, Any]] = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            normalized_segments.append(segment)
+            continue
+        normalized_segment = dict(segment)
+        if "id" in normalized_segment and normalized_segment["id"] is not None:
+            normalized_segment["id"] = str(normalized_segment["id"])
+        normalized_segments.append(normalized_segment)
+
+    normalized = dict(parsed)
+    normalized["segments"] = normalized_segments
+    return normalized
 
 
 def _extract_output_text(response_data: dict[str, Any]) -> str:

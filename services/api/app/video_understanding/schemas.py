@@ -280,12 +280,79 @@ class EvidenceBackedSegment(BaseModel):
     confidence: float = Field(default=0, ge=0, le=1)
 
 
+class RhythmCurvePoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    shot_count: int = Field(default=0, ge=0)
+    density: str = ""
+    note: str = ""
+
+    @model_validator(mode="after")
+    def validate_timing(self) -> "RhythmCurvePoint":
+        if self.end < self.start:
+            raise ValueError("end must be greater than or equal to start")
+        return self
+
+
+class SegmentRhythmNote(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    segment_id: str = ""
+    note: str = ""
+
+
+class GraphRhythmStructure(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = ""
+    avg_shot_duration: float = Field(default=0, ge=0)
+    cut_density: str = ""
+    fast_windows: list[str] = Field(default_factory=list)
+    slow_windows: list[str] = Field(default_factory=list)
+    peak_position: str = ""
+    slowdown_position: str = ""
+    rhythm_curve: list[RhythmCurvePoint] = Field(default_factory=list)
+    segment_notes: list[SegmentRhythmNote] = Field(default_factory=list)
+
+
+class PackagingTimelineItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start: float = Field(default=0, ge=0)
+    end: float = Field(default=0, ge=0)
+    type: str = ""
+    evidence: str = ""
+
+    @model_validator(mode="after")
+    def validate_timing(self) -> "PackagingTimelineItem":
+        if self.end < self.start:
+            raise ValueError("end must be greater than or equal to start")
+        return self
+
+
+class GraphPackagingStructure(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    caption_density: str = ""
+    title_style: str = ""
+    transition_style: str = ""
+    cover_style: str = ""
+    text_layout: str = ""
+    title_cards: list[str] = Field(default_factory=list)
+    sticker_signals: list[str] = Field(default_factory=list)
+    packaging_timeline: list[PackagingTimelineItem] = Field(default_factory=list)
+
+
 class ShotEvidenceGraph(BaseModel):
     shots: list[ShotEvidenceNode] = Field(default_factory=list)
     analysis_units: list[AnalysisUnit] = Field(default_factory=list)
     relations: list[ShotRelation] = Field(default_factory=list)
     beats: list[CreativeBeat] = Field(default_factory=list)
     segments: list[EvidenceBackedSegment] = Field(default_factory=list)
+    rhythm_structure: GraphRhythmStructure = Field(default_factory=GraphRhythmStructure)
+    packaging_structure: GraphPackagingStructure = Field(default_factory=GraphPackagingStructure)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -295,4 +362,6 @@ class GraphAggregationResult(BaseModel):
     relations: list[ShotRelation] = Field(default_factory=list)
     beats: list[CreativeBeat] = Field(default_factory=list)
     segments: list[EvidenceBackedSegment] = Field(default_factory=list)
+    rhythm_structure: GraphRhythmStructure = Field(default_factory=GraphRhythmStructure)
+    packaging_structure: GraphPackagingStructure = Field(default_factory=GraphPackagingStructure)
     warnings: list[str] = Field(default_factory=list)

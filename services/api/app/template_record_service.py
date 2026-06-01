@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from app.models import (
+from app.api.api_models import (
     DemoRunResponse,
     StructureTemplateRecord,
     StructureTemplateSummary,

@@ -56,6 +56,8 @@ def apply_graph_aggregation(
             "relations": aggregation.relations or graph.relations,
             "beats": aggregation.beats,
             "segments": aggregation.segments,
+            "rhythm_structure": aggregation.rhythm_structure,
+            "packaging_structure": aggregation.packaging_structure,
             "warnings": [*graph.warnings, *aggregation.warnings],
         }
     )

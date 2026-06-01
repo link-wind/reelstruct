@@ -17,6 +17,7 @@ function WorkspaceRoute({ taskText }: { taskText: string }) {
     <WorkspaceView
       taskText={agentWorkspace.state.currentPlan.prompt || taskText}
       reelStruct={reelStruct}
+      agentWorkspace={agentWorkspace}
     />
   )
 }

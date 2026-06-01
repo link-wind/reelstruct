@@ -1,12 +1,13 @@
-import type { ConfirmationKind } from "./types"
+import type { ToolConfirmationKind } from "./types"
 
 export type AgentToolStage = "structure" | "materials" | "output"
+export type AgentToolConfirmationKind = ToolConfirmationKind | ""
 
 export type AgentToolCatalogItem = {
   name: string
   title: string
   stage: AgentToolStage
-  confirmationKind: ConfirmationKind | ""
+  confirmationKind: AgentToolConfirmationKind
 }
 
 export const toolCatalog: AgentToolCatalogItem[] = [

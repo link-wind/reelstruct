@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
-from app.models import SampleVideoInput, TemplateStructure
+from app.domain.shared.domain_models import SampleVideoInput, TemplateStructure
 from app.structure_service import extract_template_structure
 from app.video_understanding.ai_graph_service import aggregate_graph_structure_with_ai
 from app.video_understanding.analysis_unit_service import build_analysis_units

@@ -14,10 +14,14 @@ function toErrorMessage(error: unknown) {
   return '规划请求失败，请稍后重试。'
 }
 
-export function useAgentWorkspace(initialPrompt?: string) {
+export function useAgentWorkspace(_initialPrompt?: string) {
   const [state, dispatch] = useReducer(agentReducer, initialAgentState)
-  const lastPromptRef = useRef('')
+  const stateRef = useRef(state)
   const currentPlanRef = useRef<AgentWorkspaceState['currentPlan']>(initialAgentState.currentPlan)
+
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
   useEffect(() => {
     currentPlanRef.current = state.currentPlan
@@ -27,7 +31,6 @@ export function useAgentWorkspace(initialPrompt?: string) {
     const normalizedPrompt = prompt.trim()
     if (!normalizedPrompt) return
 
-    lastPromptRef.current = normalizedPrompt
     dispatch({
       type: 'planningStarted',
       payload: { prompt: normalizedPrompt },
@@ -55,12 +58,6 @@ export function useAgentWorkspace(initialPrompt?: string) {
     }
   }, [])
 
-  useEffect(() => {
-    const normalizedPrompt = initialPrompt?.trim() || ''
-    if (!normalizedPrompt || lastPromptRef.current === normalizedPrompt) return
-    void submitPrompt(normalizedPrompt)
-  }, [initialPrompt, submitPrompt])
-
   const clearConfirmation = useCallback(() => {
     dispatch({ type: 'confirmationCleared' })
   }, [])
@@ -72,10 +69,25 @@ export function useAgentWorkspace(initialPrompt?: string) {
     })
   }, [])
 
+  const patchRuntime = useCallback((payload: Parameters<typeof dispatch>[0] extends infer Action
+    ? Action extends { type: 'runtimePatched'; payload: infer Payload }
+      ? Payload
+      : never
+    : never) => {
+    dispatch({
+      type: 'runtimePatched',
+      payload,
+    })
+  }, [])
+
   return {
     state,
+    stateRef,
     submitPrompt,
     clearConfirmation,
     addMessage,
+    patchRuntime,
   }
 }
+
+export type AgentWorkspaceController = ReturnType<typeof useAgentWorkspace>

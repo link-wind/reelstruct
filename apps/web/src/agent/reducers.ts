@@ -3,6 +3,7 @@ import type {
   AgentPlan,
   AgentStatus,
   ConfirmationRequest,
+  AgentPlanStepStatus,
   ToolRunRecord,
   WorkspaceRuntimeState,
 } from "./types"
@@ -60,6 +61,16 @@ export type AgentWorkspaceAction =
       type: "messageAdded"
       payload: AgentMessage
     }
+  | {
+      type: "runtimePatched"
+      payload: Partial<
+        Omit<AgentWorkspaceState, "messages" | "currentPlan"> & {
+          currentPlan?: Partial<AgentPlan>
+          toolRun?: ToolRunRecord
+          currentStepStatus?: AgentPlanStepStatus
+        }
+      >
+    }
 
 export function mapRuntimeState(
   runtime: WorkspaceRuntimeState,
@@ -109,8 +120,17 @@ export function agentReducer(
       return {
         ...state,
         agentStatus: "failed",
+        currentPlan: {
+          prompt: state.currentPlan.prompt,
+          steps: [],
+        },
+        currentStep: "",
+        toolRuns: [],
+        stageResults: {},
+        warnings: [],
+        skipReasons: [],
         pendingConfirmation: null,
-        errors: [...state.errors, action.payload.error],
+        errors: [action.payload.error],
       }
 
     case "confirmationCleared":
@@ -124,6 +144,51 @@ export function agentReducer(
         ...state,
         messages: [...state.messages, action.payload],
       }
+
+    case "runtimePatched": {
+      const nextPlan = action.payload.currentPlan
+        ? {
+            ...state.currentPlan,
+            ...action.payload.currentPlan,
+          }
+        : state.currentPlan
+
+      const nextToolRuns = action.payload.toolRun
+        ? [...state.toolRuns.filter((item) => item.tool_name !== action.payload.toolRun?.tool_name), action.payload.toolRun]
+        : state.toolRuns
+
+      const nextPlanSteps: AgentPlan["steps"] = action.payload.currentStep
+        ? nextPlan.steps.map((step) =>
+            step.tool_name === action.payload.currentStep
+              ? {
+                  ...step,
+                  status: action.payload.currentStepStatus ?? step.status,
+                }
+              : action.payload.currentStepStatus === "running" && step.status === "running"
+                ? { ...step, status: "completed" }
+                : step,
+          )
+        : nextPlan.steps
+
+      return {
+        ...state,
+        agentStatus: action.payload.agentStatus ?? state.agentStatus,
+        currentStep: action.payload.currentStep ?? state.currentStep,
+        pendingConfirmation:
+          action.payload.pendingConfirmation === undefined
+            ? state.pendingConfirmation
+            : action.payload.pendingConfirmation,
+        toolRuns: nextToolRuns,
+        stageResults: action.payload.stageResults ?? state.stageResults,
+        warnings: action.payload.warnings ?? state.warnings,
+        errors: action.payload.errors ?? state.errors,
+        skipReasons: action.payload.skipReasons ?? state.skipReasons,
+        currentPlan: {
+          ...nextPlan,
+          steps: nextPlanSteps,
+        },
+      }
+    }
 
     default:
       return state

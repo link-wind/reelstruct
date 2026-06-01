@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 import httpx
 
-from app.models import (
+from app.domain.shared.domain_models import (
     NewContentInput,
     TemplateStructure,
     TransferExplanation,

@@ -5,40 +5,43 @@ from uuid import uuid4
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.agent.models import WorkspaceRuntimeState
+from app.agent.models import AgentPlan, AgentToolExecuteRequest, AgentToolExecuteResponse, WorkspaceRuntimeState
 from app.agent.orchestrator import plan_from_prompt
-from app.environment import load_api_env
-from app.fixture_asset_service import build_render_clips_from_composition
-from app.models import (
-    CreateTemplateFromRunRequest,
+from app.agent.tool_executor import execute_tool
+from app.api.api_models import (
     CompositionSpec,
-    DemoVariantRunsResponse,
+    CreateTemplateFromRunRequest,
     DemoRunResponse,
+    DemoVariantRunsResponse,
     PrepareDemoAssetsResponse,
+    PreviewRunRequest,
     RenderClipPreview,
     RenderDemoResponse,
     RunBatchResponse,
+    RunNoteUpdateRequest,
     RunPinUpdateRequest,
     RunPreferredUpdateRequest,
-    RunNoteUpdateRequest,
     RunRecordSummary,
     SampleEvidenceRequest,
     SampleUploadResponse,
+    StructurePreviewRequest,
+    StructurePreviewResponse,
     StructureTemplateRecord,
     StructureTemplateSummary,
-    TemplateStructure,
     StructureVariantSummary,
     StructureVariantsResponse,
     TranscriptUploadResponse,
     UpdateStructureTemplateRequest,
     UserSlotAsset,
-    StructurePreviewRequest,
-    StructurePreviewResponse,
 )
+from app.domain.shared.domain_models import TemplateStructure
+from app.environment import load_api_env
+from app.fixture_asset_service import build_render_clips_from_composition
 from app.sample_evidence_service import generate_sample_asr_evidence, generate_sample_ocr_evidence
-from app.material_asset_service import save_material_upload
+from app.material_asset_service import enrich_material_analysis_with_video_evidence, save_material_upload
+from app.material_rag_service import index_material_asset
 from app.render_service import render_demo_video
 from app.run_record_service import (
     delete_demo_run_record,
@@ -61,7 +64,7 @@ from app.template_record_service import (
     rollback_structure_template_record,
     update_structure_template_record,
 )
-from app.workflow_service import create_demo_run
+from app.workflow_service import create_demo_run, create_demo_run_from_preview
 from app.video_understanding.pipeline import build_ai_or_fallback_structure_template
 from app.video_understanding.schemas import ShotEvidenceGraph
 
@@ -100,9 +103,17 @@ app.mount("/keyframes", StaticFiles(directory=str(KEYFRAMES_DIR)), name="keyfram
 app.mount("/materials", StaticFiles(directory=str(MATERIALS_DIR)), name="materials")
 
 
+class AgentPlanRequestState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_plan: AgentPlan = Field(default_factory=AgentPlan)
+
+
 class AgentPlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     prompt: str
-    state: WorkspaceRuntimeState = Field(default_factory=WorkspaceRuntimeState)
+    state: AgentPlanRequestState = Field(default_factory=AgentPlanRequestState)
 
 
 @app.get("/health")
@@ -110,26 +121,62 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/api/agent/plan")
-def create_agent_plan(request: AgentPlanRequest) -> dict:
-    planned_state = plan_from_prompt(request.prompt, request.state)
-    return planned_state.model_dump()
+@app.post("/api/agent/plan", response_model=WorkspaceRuntimeState)
+def create_agent_plan(request: AgentPlanRequest) -> WorkspaceRuntimeState:
+    planning_state = WorkspaceRuntimeState(current_plan=request.state.current_plan)
+    return plan_from_prompt(request.prompt, planning_state)
+
+
+@app.post("/api/agent/tools/execute", response_model=AgentToolExecuteResponse)
+def execute_agent_tool(request: AgentToolExecuteRequest) -> AgentToolExecuteResponse:
+    try:
+        result = execute_tool(request.tool_name, request.payload)
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AgentToolExecuteResponse.model_validate(result)
 
 
 @app.post("/api/structure/preview", response_model=StructurePreviewResponse)
 def preview_structure_transfer(request: StructurePreviewRequest) -> StructurePreviewResponse:
+    print(
+        "[api.structure.preview] start",
+        {
+            "sample_local_path": request.sample_local_path,
+            "variant": request.variant,
+            "mapping_override_count": len(request.mapping_overrides),
+            "material_request_count": len(request.material_request_sheet),
+            "supplement_selection_count": len(request.supplement_selections),
+            "has_shot_evidence_graph": request.shot_evidence_graph is not None,
+            "shot_count": len(request.shot_evidence_graph.shots) if request.shot_evidence_graph else 0,
+            "analysis_unit_count": len(request.shot_evidence_graph.analysis_units) if request.shot_evidence_graph else 0,
+        },
+        flush=True,
+    )
     template_record = _get_template_record_or_404(request.template_id) if request.template_id else None
     ai_template = _build_ai_template_for_request(request, template_record.template if template_record else None)
-    return build_structure_preview(
+    response = build_structure_preview(
         request.sample,
         request.content,
         template_override=template_record.template if template_record else None,
         ai_template=ai_template,
         mapping_overrides=request.mapping_overrides,
         material_request_sheet=request.material_request_sheet,
+        supplement_selections=request.supplement_selections,
         variant=request.variant,
         use_ai_transfer_explanation=request.use_ai_transfer_explanation,
     )
+    print(
+        "[api.structure.preview] done",
+        {
+            "slot_count": len(response.template.script_pattern),
+            "gap_count": len(response.transfer_plan.gaps),
+            "analysis_metrics": len(response.template.analysis_summary.metrics),
+        },
+        flush=True,
+    )
+    return response
 
 
 @app.post("/api/structure/variants", response_model=StructureVariantsResponse)
@@ -145,6 +192,7 @@ def compare_structure_variants(request: StructurePreviewRequest) -> StructureVar
             ai_template=ai_template,
             mapping_overrides=request.mapping_overrides,
             material_request_sheet=request.material_request_sheet,
+            supplement_selections=request.supplement_selections,
             variant=variant,
             use_ai_transfer_explanation=request.use_ai_transfer_explanation,
         )
@@ -175,6 +223,14 @@ def run_demo_workflow(request: StructurePreviewRequest) -> DemoRunResponse:
         template_id=template_record.template_id if template_record else "",
         template_title=template_record.template.title if template_record else "",
         template_tags=template_record.tags if template_record else [],
+    )
+
+
+@app.post("/api/runs/from-preview", response_model=DemoRunResponse)
+def run_demo_from_preview(request: PreviewRunRequest) -> DemoRunResponse:
+    return create_demo_run_from_preview(
+        request,
+        runs_dir=RUNS_DIR,
     )
 
 
@@ -379,6 +435,32 @@ def generate_asr_evidence(request: SampleEvidenceRequest) -> ShotEvidenceGraph:
 @app.post("/api/materials/upload", response_model=UserSlotAsset)
 def upload_material_asset(slot_id: str = Form(...), file: UploadFile = File(...)) -> UserSlotAsset:
     return save_material_upload(file, slot_id=slot_id, material_dir=MATERIALS_DIR)
+
+
+@app.post("/api/materials/evidence", response_model=UserSlotAsset)
+def generate_material_evidence(asset: UserSlotAsset) -> UserSlotAsset:
+    material_path = Path(asset.local_path)
+    if not material_path.is_file():
+        raise HTTPException(status_code=400, detail="素材文件不存在，无法生成素材证据。")
+    if MATERIALS_DIR not in material_path.resolve().parents and material_path.resolve() != MATERIALS_DIR.resolve():
+        raise HTTPException(status_code=400, detail="素材文件不在素材目录内。")
+    evidence_dir = MATERIALS_DIR / f"{material_path.stem}-evidence"
+    try:
+        analysis = enrich_material_analysis_with_video_evidence(
+            material_path,
+            analysis=asset.analysis,
+            evidence_dir=evidence_dir,
+            evidence_public_prefix=f"/materials/{material_path.stem}-evidence",
+            strict=True,
+        )
+    except (RuntimeError, ValueError, OSError) as exc:
+        detail = "素材证据生成失败。"
+        if str(exc):
+            detail = f"{detail} {str(exc)}"
+        raise HTTPException(status_code=400, detail=detail) from exc
+    enriched_asset = asset.model_copy(update={"analysis": analysis})
+    index_material_asset(enriched_asset)
+    return enriched_asset
 
 
 @app.post("/api/media/prepare-demo-assets", response_model=PrepareDemoAssetsResponse)

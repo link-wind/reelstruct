@@ -1,7 +1,11 @@
 import React from 'react'
+import { localizeLabel, localizeShotName, localizeUnitName } from './localize'
 
 export interface ShotEvidenceViewModel {
   shotIndex: number
+  start: number
+  end: number
+  duration: number
   time: string
   frames: Array<{ role: string; time: number; publicUrl: string }>
   ocrTexts: Array<{ text: string; frameIndex: number; frameTime: number; position: string; confidence: number }>
@@ -16,6 +20,8 @@ export interface ShotEvidenceViewModel {
 export interface AnalysisUnitViewModel {
   unitId: string
   time: string
+  start: number
+  end: number
   duration: number
   shotIndices: number[]
   representativeFrames: Array<{ role: string; time: number; publicUrl: string; shotIndex: number }>
@@ -42,11 +48,11 @@ export default function ShotEvidencePanel({
     <article className="insight-panel soft-card">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Shot evidence</p>
+          <p className="eyebrow">镜头证据</p>
           <h3>镜头证据</h3>
         </div>
         <span className="status">
-          {units.length ? `${units.length} units / ${shots.length} shots` : shots.length ? `${shots.length} shots` : '等待生成'}
+          {units.length ? `${units.length} 个分析单元 / ${shots.length} 个镜头` : shots.length ? `${shots.length} 个镜头` : '等待生成'}
         </span>
       </div>
 
@@ -63,18 +69,18 @@ export default function ShotEvidencePanel({
           {units.map((unit) => (
             <section className="analysis-unit-item" key={unit.unitId}>
               <div className="shot-evidence-head">
-                <strong>{unit.unitId}</strong>
+                <strong>{localizeUnitName(unit.unitId)}</strong>
                 <span>
-                  {unit.time} · shots {unit.shotIndices.join(', ')}
+                  {unit.time} · 镜头 {unit.shotIndices.join('、')}
                 </span>
               </div>
               {unit.representativeFrames.length ? (
                 <div className="node-keyframes">
                   {unit.representativeFrames.map((frame) => (
                     <figure key={`${unit.unitId}-${frame.shotIndex}-${frame.role}-${frame.time}`}>
-                      <img src={frame.publicUrl} alt={`${unit.unitId} shot ${frame.shotIndex} ${frame.role}`} />
+                      <img src={frame.publicUrl} alt={`${localizeUnitName(unit.unitId)} ${localizeShotName(frame.shotIndex)} ${localizeLabel(frame.role, frame.role)}`} />
                       <figcaption>
-                        shot {frame.shotIndex} · {frame.role} · {frame.time.toFixed(2)}s
+                        {localizeShotName(frame.shotIndex)} · {localizeLabel(frame.role, frame.role)} · {frame.time.toFixed(2)}s
                       </figcaption>
                     </figure>
                   ))}
@@ -93,7 +99,7 @@ export default function ShotEvidencePanel({
                   {unit.ocrTexts.slice(0, 4).map((item) => (
                     <div key={`${unit.unitId}-ocr-${item.frameIndex}-${item.frameTime}-${item.text}`}>
                       <span>
-                        frame {item.frameIndex} · {item.frameTime.toFixed(2)}s · {Math.round(item.confidence * 100)}%
+                        帧 {item.frameIndex} · {item.frameTime.toFixed(2)}s · {Math.round(item.confidence * 100)}%
                       </span>
                       <p>{item.text}</p>
                     </div>
@@ -121,11 +127,11 @@ export default function ShotEvidencePanel({
                 </div>
               ) : null}
               <details className="analysis-unit-shots">
-                <summary>查看原始 shots</summary>
+                <summary>查看原始镜头</summary>
                 <div>
                   {unit.shots.map((shot) => (
                     <span key={shot.shotIndex}>
-                      Shot {shot.shotIndex} · {shot.time}
+                      {localizeShotName(shot.shotIndex)} · {shot.time}
                     </span>
                   ))}
                 </div>
@@ -138,16 +144,16 @@ export default function ShotEvidencePanel({
           {shots.map((shot) => (
             <section className="shot-evidence-item" key={shot.shotIndex}>
               <div className="shot-evidence-head">
-                <strong>Shot {shot.shotIndex}</strong>
+                <strong>{localizeShotName(shot.shotIndex)}</strong>
                 <span>{shot.time}</span>
               </div>
               {shot.frames.length ? (
                 <div className="node-keyframes">
                   {shot.frames.map((frame) => (
                     <figure key={`${shot.shotIndex}-${frame.role}-${frame.time}`}>
-                      <img src={frame.publicUrl} alt={`Shot ${shot.shotIndex} ${frame.role}`} />
+                      <img src={frame.publicUrl} alt={`${localizeShotName(shot.shotIndex)} ${localizeLabel(frame.role, frame.role)}`} />
                       <figcaption>
-                        {frame.role} · {frame.time.toFixed(2)}s
+                        {localizeLabel(frame.role, frame.role)} · {frame.time.toFixed(2)}s
                       </figcaption>
                     </figure>
                   ))}
@@ -155,12 +161,12 @@ export default function ShotEvidencePanel({
               ) : null}
               <p>{shot.visualSummary || '等待镜头理解结果'}</p>
               {shot.ocrTexts.length ? (
-                <div className="shot-text-evidence-list" aria-label={`Shot ${shot.shotIndex} OCR`}>
+                <div className="shot-text-evidence-list" aria-label={`${localizeShotName(shot.shotIndex)} OCR`}>
                   <strong>OCR 可见文字</strong>
                   {shot.ocrTexts.map((item) => (
                     <div key={`${shot.shotIndex}-ocr-${item.frameIndex}-${item.frameTime}-${item.text}`}>
                       <span>
-                        frame {item.frameIndex} · {item.frameTime.toFixed(2)}s · {Math.round(item.confidence * 100)}%
+                        帧 {item.frameIndex} · {item.frameTime.toFixed(2)}s · {Math.round(item.confidence * 100)}%
                       </span>
                       <p>{item.text}</p>
                     </div>
@@ -168,7 +174,7 @@ export default function ShotEvidencePanel({
                 </div>
               ) : null}
               {shot.transcriptTexts.length ? (
-                <div className="shot-text-evidence-list" aria-label={`Shot ${shot.shotIndex} ASR`}>
+                <div className="shot-text-evidence-list" aria-label={`${localizeShotName(shot.shotIndex)} ASR`}>
                   <strong>ASR 口播文本</strong>
                   {shot.transcriptTexts.map((item) => (
                     <div key={`${shot.shotIndex}-asr-${item.sourceStart}-${item.sourceEnd}`}>
@@ -195,7 +201,7 @@ export default function ShotEvidencePanel({
       ) : (
         <div className="empty-state">
           <strong>还没有镜头证据</strong>
-          <span>上传并生成结构后，这里会展示每个 shot 的画面、文本和 AI 理解。</span>
+          <span>上传并生成结构后，这里会展示每个镜头的画面、文本和 AI 理解。</span>
         </div>
       )}
     </article>

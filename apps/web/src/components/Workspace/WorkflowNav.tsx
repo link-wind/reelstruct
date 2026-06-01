@@ -34,7 +34,7 @@ const STAGES: Array<{
     id: 'output',
     index: '03',
     title: '输出检查',
-    description: '检查 demo、缺口和后续版本输出。',
+    description: '检查成片样片、缺口和后续版本输出。',
   },
 ]
 

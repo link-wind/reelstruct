@@ -4,8 +4,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from app.models import CompositionSpec
-from app.models import MaterialFitAnalysis
+from app.domain.shared.domain_models import CompositionSpec, MaterialFitAnalysis
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]

@@ -3,11 +3,18 @@ from pathlib import Path
 from zipfile import ZipFile
 
 from fastapi.testclient import TestClient
+import pytest
 
 from app.main import app
 from app.models import SampleAnalysisSummary, SampleVideoInput, StructureSlot, TemplateStructure
 from app.video_understanding.schemas import ShotEvidenceGraph, ShotEvidenceNode, ShotUnderstanding, VideoShot
 from app.video_understanding.pipeline import build_fallback_structure_template
+
+
+@pytest.fixture(autouse=True)
+def isolate_persistent_workflow_storage(monkeypatch, tmp_path):
+    monkeypatch.setattr("app.main.RUNS_DIR", tmp_path / "runs")
+    monkeypatch.setattr("app.main.TEMPLATES_DIR", tmp_path / "templates")
 
 
 def test_create_demo_run_returns_preview_assets_video_and_trace():
@@ -49,6 +56,109 @@ def test_create_demo_run_returns_preview_assets_video_and_trace():
         "done",
     ]
     assert body["trace"][-1]["progress"] == 100
+
+
+def test_create_demo_run_from_preview_skips_structure_generation_steps():
+    client = TestClient(app)
+
+    preview_response = client.post(
+        "/api/structure/preview",
+        json={
+            "sample": {
+                "title": "咖啡拉花爆款样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先用拉花特写吸引注意，再展示手作过程。",
+            },
+            "content": {
+                "topic": "精品咖啡店开业短视频",
+                "product_name": "巷口手作咖啡",
+                "selling_points": ["手作拉花", "新店开业优惠"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+
+    response = client.post(
+        "/api/runs/from-preview",
+        json={
+            "preview": preview_payload,
+            "variant": "standard",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "succeeded"
+    assert body["preview"]["transfer_plan"]["title"] == preview_payload["transfer_plan"]["title"]
+    assert body["evaluation_summary"]["headline"] == preview_payload["evaluation_summary"]["headline"]
+    assert len(body["prepared_assets"]) >= 1
+    assert body["rendered_video"]["video_url"].startswith("/output/")
+    assert [event["step"] for event in body["trace"]] == [
+        "prepare_assets",
+        "render_video",
+        "done",
+    ]
+    assert body["trace"][-1]["progress"] == 100
+
+
+def test_create_demo_run_from_preview_applies_mapping_overrides_to_preview_and_tracks():
+    client = TestClient(app)
+
+    preview_response = client.post(
+        "/api/structure/preview",
+        json={
+            "sample": {
+                "title": "咖啡拉花爆款样例",
+                "duration": 20,
+                "shot_count": 6,
+                "transcript_summary": "先用拉花特写吸引注意，再展示手作过程。",
+            },
+            "content": {
+                "topic": "精品咖啡店开业短视频",
+                "product_name": "巷口手作咖啡",
+                "selling_points": ["手作拉花", "新店开业优惠"],
+                "available_assets": ["开头吸引镜头", "使用过程镜头"],
+            },
+        },
+    )
+
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+
+    response = client.post(
+        "/api/runs/from-preview",
+        json={
+            "preview": preview_payload,
+            "variant": "standard",
+            "mapping_overrides": [
+                {
+                    "slot_id": "hook",
+                    "target_message": "先看拉花成品，再讲今日开业优惠",
+                    "sample_evidence": "改成结果先行的开场证据",
+                    "asset_strategy": "首帧用成品特写，后接门店环境",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    hook_mapping = next(item for item in body["preview"]["transfer_plan"]["mappings"] if item["slot_id"] == "hook")
+    hook_slot = next(item for item in body["preview"]["template"]["script_pattern"] if item["id"] == "hook")
+    hook_captions = [
+        track["text"]
+        for track in body["preview"]["composition"]["tracks"]
+        if track["slot_id"] == "hook" and track["type"] == "caption"
+    ]
+
+    assert hook_mapping["target_message"] == "先看拉花成品，再讲今日开业优惠"
+    assert hook_mapping["asset_strategy"] == "首帧用成品特写，后接门店环境"
+    assert hook_slot["sample_evidence"] == "改成结果先行的开场证据"
+    assert "先看拉花成品，再讲今日开业优惠" in hook_captions
 
 
 def test_preview_structure_uses_ai_template_when_sample_path_is_enabled(monkeypatch, tmp_path):
@@ -122,6 +232,26 @@ def test_preview_structure_uses_ai_template_when_sample_path_is_enabled(monkeypa
         "shot understanding warning"
     ]
     assert body["shot_evidence_graph"]["warnings"] == ["graph warning"]
+
+
+def test_preview_structure_rejects_unknown_supplement_method():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/structure/preview",
+        json={
+            "sample": {"title": "样例", "duration": 20, "shot_count": 6},
+            "content": {
+                "topic": "新品短视频",
+                "available_assets": ["开头吸引镜头"],
+            },
+            "supplement_selections": [
+                {"slot_id": "selling_points", "method": "未知补全"},
+            ],
+        },
+    )
+
+    assert response.status_code == 422
 
 
 def test_preview_structure_passes_manual_text_evidence_graph_to_ai(monkeypatch, tmp_path):

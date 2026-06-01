@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from app.models import DemoRunResponse, RunBatchResponse, RunRecordSummary
+from app.api.api_models import DemoRunResponse, RunBatchResponse, RunRecordSummary
 
 
 def save_demo_run_record(run: DemoRunResponse, runs_dir: Path) -> Path:

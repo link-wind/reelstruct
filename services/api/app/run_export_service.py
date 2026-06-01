@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import Optional
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from app.models import DemoRunResponse, MaterialGap, MaterialRequestTask
+from app.api.api_models import DemoRunResponse
+from app.domain.shared.domain_models import MaterialGap, MaterialRequestTask
 
 
 def build_run_export_zip(run: DemoRunResponse) -> bytes:

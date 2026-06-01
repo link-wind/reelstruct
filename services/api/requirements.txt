@@ -6,4 +6,5 @@ pytest==8.3.4
 scenedetect>=0.6.4
 faster-whisper>=1.1.0
 paddleocr>=3.0.0
+pymilvus>=2.5.0
 uvicorn==0.34.0

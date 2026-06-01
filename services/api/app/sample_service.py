@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import UploadFile
 
-from app.models import SampleUploadResponse, SampleVideoInput, TranscriptUploadResponse
+from app.api.api_models import SampleUploadResponse, SampleVideoInput, TranscriptUploadResponse
 from app.video_understanding.keyframe_service import extract_keyframes
 from app.video_understanding.shot_detector import detect_video_signal
 

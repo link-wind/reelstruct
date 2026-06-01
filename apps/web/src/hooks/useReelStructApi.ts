@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { WorkspaceRuntimeState } from '../agent/types'
 
-type StructureSlot = {
+export type StructureSlot = {
   id: string
   label: string
   start: number
@@ -106,7 +106,7 @@ type TimelinePatch = {
   warnings: string[]
 }
 
-type MaterialGap = {
+export type MaterialGap = {
   slot_id: string
   missing_asset: string
   impact: string
@@ -166,9 +166,9 @@ type MaterialRetrievalCandidate = {
   reuse_strategy: string
 }
 
-type MaterialTaskStatus = '待补拍' | '已拍' | '已交付'
+export type MaterialTaskStatus = '待补拍' | '已拍' | '已交付'
 
-type MaterialRequestTask = {
+export type MaterialRequestTask = {
   slot_id: string
   status: MaterialTaskStatus
 }
@@ -179,7 +179,7 @@ type MaterialRequestSheetItem = {
   gap: MaterialGap | undefined
 }
 
-type MaterialFitAnalysis = {
+export type MaterialFitAnalysis = {
   duration: number
   shot_count: number
   recommended_slot_id: string
@@ -212,7 +212,7 @@ type MaterialEvidenceChunk = {
   embedding_text: string
 }
 
-type UserSlotAsset = {
+export type UserSlotAsset = {
   slot_id: string
   filename: string
   local_path: string
@@ -241,7 +241,7 @@ type TransferExplanation = {
   warnings: string[]
 }
 
-type TransferMapping = {
+export type TransferMapping = {
   slot_id: string
   source_label: string
   target_message: string
@@ -289,14 +289,95 @@ type GraphPresentationSummary = {
   edges: GraphPresentationEdge[]
 }
 
-type ShotEvidenceGraph = {
-  shots: unknown[]
-  analysis_units: unknown[]
-  relations: unknown[]
+export type FrameEvidence = {
+  shot_index: number
+  frame_index: number
+  time: number
+  role: 'start' | 'middle' | 'safe_end' | 'end' | 'third' | 'two_thirds'
+  public_url: string
+}
+
+export type ShotUnderstanding = {
+  shot_index: number
+  visual_summary: string
+  text_summary: string
+  subject: string
+  scene: string
+  action: string
+  packaging_signals: string[]
+  creative_function_hint: string
+  confidence: number
   warnings: string[]
 }
 
-type EvaluationSummary = {
+export type FrameOCRText = {
+  shot_index: number
+  frame_index: number
+  frame_time: number
+  text: string
+  position: string
+  confidence: number
+}
+
+export type ShotTextAlignment = {
+  shot_index: number
+  text: string
+  source_start: number
+  source_end: number
+  overlap_ratio: number
+}
+
+export type ShotEvidenceNode = {
+  shot: VideoShot
+  frames: FrameEvidence[]
+  ocr_texts: FrameOCRText[]
+  transcript_texts: ShotTextAlignment[]
+  understanding: ShotUnderstanding
+}
+
+export type AnalysisUnitUnderstanding = {
+  unit_id: string
+  visual_summary: string
+  text_summary: string
+  subject: string
+  scene: string
+  action: string
+  packaging_signals: string[]
+  creative_function_hint: string
+  confidence: number
+  warnings: string[]
+}
+
+export type AnalysisUnit = {
+  unit_id: string
+  shot_indices: number[]
+  start: number
+  end: number
+  duration: number
+  representative_frames: FrameEvidence[]
+  ocr_texts: FrameOCRText[]
+  transcript_texts: ShotTextAlignment[]
+  understanding: AnalysisUnitUnderstanding
+}
+
+export type ShotRelation = {
+  from_shot: number
+  to_shot: number
+  relation_type: string
+  relation_summary: string
+  rhythm_change: string
+  semantic_shift: string
+  confidence: number
+}
+
+export type ShotEvidenceGraph = {
+  shots: ShotEvidenceNode[]
+  analysis_units: AnalysisUnit[]
+  relations: ShotRelation[]
+  warnings: string[]
+}
+
+export type EvaluationSummary = {
   headline: string
   highlights: string[]
   structure_quality: 'low' | 'medium' | 'high'
@@ -305,7 +386,7 @@ type EvaluationSummary = {
   result_quality: 'low' | 'medium' | 'high'
 }
 
-type StructurePreviewResponse = {
+export type StructurePreviewResponse = {
   template: {
     title: string
     script_pattern: StructureSlot[]
@@ -373,7 +454,7 @@ type RunTraceEvent = {
   progress: number
 }
 
-type DemoRunResponse = {
+export type DemoRunResponse = {
   run_id: string
   batch_id: string
   created_at: string
@@ -396,7 +477,7 @@ type DemoVariantRunsResponse = {
   runs: DemoRunResponse[]
 }
 
-type RunRecordSummary = {
+export type RunRecordSummary = {
   run_id: string
   batch_id: string
   created_at: string
@@ -418,13 +499,13 @@ type RunRecordSummary = {
   note: string
 }
 
-type RunBatchResponse = {
+export type RunBatchResponse = {
   batch_id: string
   preferred_run_id: string
   runs: RunRecordSummary[]
 }
 
-type StructureVariantSummary = {
+export type StructureVariantSummary = {
   variant: OutputVariant
   title: string
   duration: number
@@ -438,7 +519,7 @@ type StructureVariantsResponse = {
   variants: StructureVariantSummary[]
 }
 
-type StructureTemplateRecord = {
+export type StructureTemplateRecord = {
   template_id: string
   created_at: string
   source_run_id: string
@@ -470,16 +551,16 @@ type StructureTemplateSummary = {
 
 type RunStatusFilter = 'all' | 'succeeded'
 
-type OutputVariant = 'standard' | 'high_click' | 'high_conversion' | 'fast_rhythm'
+export type OutputVariant = 'standard' | 'high_click' | 'high_conversion' | 'fast_rhythm'
 
-type SampleVideoInput = {
+export type SampleVideoInput = {
   title: string
   duration: number
   shot_count: number
   transcript_summary: string
 }
 
-type VideoShot = {
+export type VideoShot = {
   index: number
   start: number
   end: number
@@ -506,14 +587,14 @@ type VideoSignal = {
   }
 }
 
-type KeyframeEvidence = {
+export type KeyframeEvidence = {
   shot_index: number
   keyframe_time: number
   local_path: string
   public_url: string
 }
 
-type NewContentInput = {
+export type NewContentInput = {
   topic: string
   product_name: string
   selling_points: string[]
@@ -521,7 +602,7 @@ type NewContentInput = {
   uploaded_assets: UserSlotAsset[]
 }
 
-type SampleUploadResponse = {
+export type SampleUploadResponse = {
   sample_id: string
   filename: string
   local_path: string
@@ -531,7 +612,7 @@ type SampleUploadResponse = {
   keyframes: KeyframeEvidence[]
 }
 
-type TranscriptUploadResponse = {
+export type TranscriptUploadResponse = {
   filename: string
   transcript_summary: string
 }
@@ -655,6 +736,24 @@ export async function requestAgentPlan(body: {
   }
 }): Promise<WorkspaceRuntimeState> {
   return requestJson<WorkspaceRuntimeState>('/api/agent/plan', {
+    method: 'POST',
+    body,
+  })
+}
+
+export async function requestAgentToolExecution<TData extends Record<string, unknown> = Record<string, unknown>>(body: {
+  tool_name: string
+  payload: Record<string, unknown>
+}): Promise<{
+  tool_name: string
+  stage: string
+  data: TData
+}> {
+  return requestJson<{
+    tool_name: string
+    stage: string
+    data: TData
+  }>('/api/agent/tools/execute', {
     method: 'POST',
     body,
   })

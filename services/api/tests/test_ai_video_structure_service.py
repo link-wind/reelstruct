@@ -889,6 +889,33 @@ def test_parse_graph_segments_accepts_valid_json():
                     "confidence": 0.88,
                 }
             ],
+            "rhythm_structure": {
+                "summary": "前 3 秒快进入，中段放慢展示过程。",
+                "avg_shot_duration": 1.42,
+                "cut_density": "fast",
+                "fast_windows": ["0.0-3.0"],
+                "slow_windows": ["6.0-9.0"],
+                "peak_position": "2.0-3.0",
+                "slowdown_position": "6.0-9.0",
+                "rhythm_curve": [
+                    {"start": 0.0, "end": 3.0, "shot_count": 4, "density": "fast", "note": "hook 快切"}
+                ],
+                "segment_notes": [
+                    {"segment_id": "seg_1", "note": "Hook 使用快切制造停留"}
+                ],
+            },
+            "packaging_structure": {
+                "caption_density": "高",
+                "title_style": "开场大字幕",
+                "transition_style": "硬切",
+                "cover_style": "结果画面 + 强标题",
+                "text_layout": "底部字幕 + 中部大标题",
+                "title_cards": ["0.0-1.5 出现大标题"],
+                "sticker_signals": ["价格标签"],
+                "packaging_timeline": [
+                    {"start": 0.0, "end": 2.0, "type": "title_card", "evidence": "shot 1 OCR 大字"}
+                ],
+            },
             "warnings": ["evidence should stay grounded"],
         }
     )
@@ -896,7 +923,133 @@ def test_parse_graph_segments_accepts_valid_json():
     assert result.relations[0].relation_type == "contrast"
     assert result.beats[0].beat_id == "beat_1"
     assert result.segments[0].evidence == ["shot 1 transcript: 熬夜脸很垮？"]
+    assert result.rhythm_structure.summary == "前 3 秒快进入，中段放慢展示过程。"
+    assert result.rhythm_structure.cut_density == "fast"
+    assert result.rhythm_structure.rhythm_curve[0].shot_count == 4
+    assert result.packaging_structure.caption_density == "高"
+    assert result.packaging_structure.packaging_timeline[0].type == "title_card"
     assert result.warnings == ["evidence should stay grounded"]
+
+
+def test_build_graph_prompt_requires_chinese_natural_language_values():
+    from app.video_understanding.ai_graph_service import _build_graph_prompt
+    from app.video_understanding.schemas import VideoShot
+    from app.video_understanding.shot_evidence_graph import build_initial_shot_evidence_graph
+
+    graph = build_initial_shot_evidence_graph(
+        shots=[VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)],
+        frames=[],
+    )
+
+    prompt = _build_graph_prompt(graph)
+
+    assert "JSON 字段名保持英文" in prompt
+    assert "所有自然语言字段的值必须使用简体中文" in prompt
+    assert "禁止输出英文标签" in prompt
+    assert "Only 2 shots are available" in prompt
+    assert "必须改写成简体中文" in prompt
+    assert "不能输出 analysis_units.unit_1.understanding.visual_summary" in prompt
+    assert "分析单元 1 的画面理解" in prompt
+
+
+def test_graph_aggregation_detects_mixed_english_user_facing_text():
+    from app.video_understanding.ai_graph_service import _needs_chinese_rewrite
+
+    assert _needs_chinese_rewrite(
+        {
+            "warnings": [
+                "镜头 1 contains OCR recognition errors in some English and a few Chinese fragments.",
+                "Rhythm inference is limited by sparse shot count and lacks finer intra-shot motion timing evidence.",
+            ]
+        }
+    )
+
+
+def test_graph_aggregation_detects_english_packaging_structure_text():
+    from app.video_understanding.ai_graph_service import _needs_chinese_rewrite
+
+    assert _needs_chinese_rewrite(
+        {
+            "packaging_structure": {
+                "title_style": "镜头 1 uses large bilingual title typography and keyword display",
+            }
+        }
+    )
+    assert _needs_chinese_rewrite({"packaging_structure": {"caption_density": "high in 镜头 1, medium in 镜头 2"}})
+    assert _needs_chinese_rewrite(
+        {
+            "packaging_structure": {
+                "caption_density": "high in 镜头 1, medium in 镜头 2",
+                "title_style": (
+                    "镜头 1 uses large bilingual title typography and keyword display; "
+                    "镜头 2 uses centered account/brand text in end-card style"
+                ),
+                "transition_style": "硬切 from 镜头 1 to 镜头 2 evidenced by relation 'adjacent cut'",
+                "cover_style": (
+                    "opening has obvious poster-like cover packaging; "
+                    "ending has platform account redirect end-card style"
+                ),
+                "text_layout": (
+                    "镜头 1 features dense multi-zone text layout with large title blocks and time/location lines"
+                ),
+            }
+        }
+    )
+
+
+def test_shot_understanding_prompts_require_chinese_natural_language_values():
+    from app.video_understanding.schemas import AnalysisUnit, VideoShot
+    from app.video_understanding.shot_evidence_graph import build_initial_shot_evidence_graph
+    from app.video_understanding.shot_understanding_service import _build_prompt, _build_unit_prompt
+
+    graph = build_initial_shot_evidence_graph(
+        shots=[VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)],
+        frames=[],
+    )
+    unit = AnalysisUnit(unit_id="unit_1", shot_indices=[1], start=0, end=2, duration=2)
+
+    shot_prompt = _build_prompt(graph.shots[0])
+    unit_prompt = _build_unit_prompt(unit)
+
+    assert "所有自然语言字段的值必须使用简体中文" in shot_prompt
+    assert "creative_function_hint 只能保留下面列出的英文枚举值" in shot_prompt
+    assert "所有自然语言字段的值必须使用简体中文" in unit_prompt
+
+
+def test_apply_graph_aggregation_preserves_rhythm_and_packaging_structures():
+    from app.video_understanding.schemas import (
+        GraphAggregationResult,
+        GraphPackagingStructure,
+        GraphRhythmStructure,
+        PackagingTimelineItem,
+        RhythmCurvePoint,
+        VideoShot,
+    )
+    from app.video_understanding.shot_evidence_graph import apply_graph_aggregation, build_initial_shot_evidence_graph
+
+    graph = build_initial_shot_evidence_graph(
+        shots=[VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)],
+        frames=[],
+    )
+    aggregation = GraphAggregationResult(
+        rhythm_structure=GraphRhythmStructure(
+            summary="开场快节奏",
+            cut_density="fast",
+            rhythm_curve=[RhythmCurvePoint(start=0, end=2, shot_count=1, density="fast", note="单镜头快进入")],
+        ),
+        packaging_structure=GraphPackagingStructure(
+            caption_density="高",
+            title_style="大标题",
+            packaging_timeline=[PackagingTimelineItem(start=0, end=2, type="title_card", evidence="OCR 大字")],
+        ),
+    )
+
+    merged = apply_graph_aggregation(graph, aggregation)
+
+    assert merged.rhythm_structure.summary == "开场快节奏"
+    assert merged.rhythm_structure.rhythm_curve[0].density == "fast"
+    assert merged.packaging_structure.title_style == "大标题"
+    assert merged.packaging_structure.packaging_timeline[0].evidence == "OCR 大字"
 
 
 def test_parse_graph_segments_normalizes_common_ai_field_aliases():
@@ -1085,6 +1238,52 @@ def test_aggregate_graph_structure_with_ai_retries_transient_503(monkeypatch):
     assert result.warnings == ["ok"]
 
 
+def test_aggregate_graph_structure_with_ai_rewrites_english_warnings(monkeypatch):
+    from app.video_understanding.ai_graph_service import aggregate_graph_structure_with_ai
+    from app.video_understanding.shot_evidence_graph import build_initial_shot_evidence_graph
+
+    graph = build_initial_shot_evidence_graph(
+        shots=[VideoShot(index=1, start=0, end=2, duration=2, keyframe_time=1)],
+        frames=[],
+    )
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    posted_payloads = []
+
+    class FakeResponse:
+        def __init__(self, output_text):
+            self.output_text = output_text
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"output_text": self.output_text}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+        def post(self, url, *, headers, json):
+            posted_payloads.append(json)
+            if len(posted_payloads) == 1:
+                return FakeResponse('{"warnings":["Only 2 shots are available, so beat/segment granularity is coarse."],"segments":[]}')
+            return FakeResponse('{"warnings":["当前只有 2 个镜头可用，节拍和段落划分粒度会比较粗。"],"segments":[]}')
+
+    monkeypatch.setattr("app.video_understanding.ai_graph_service.httpx.Client", FakeClient)
+
+    result = aggregate_graph_structure_with_ai(graph)
+
+    assert len(posted_payloads) == 2
+    assert "请把以下 JSON 中面向用户展示的英文说明改写为简体中文" in posted_payloads[1]["input"][0]["content"][0]["text"]
+    assert result.warnings == ["当前只有 2 个镜头可用，节拍和段落划分粒度会比较粗。"]
+
+
 def test_parse_graph_segments_defaults_missing_collections_to_empty_lists():
     from app.video_understanding.ai_graph_service import parse_graph_segments
 
@@ -1231,6 +1430,37 @@ def test_decompose_video_structure_with_ai_posts_prompt_and_returns_analysis(mon
     assert posted["headers"]["Authorization"] == "Bearer test-secret-key"
     assert "test-secret-key" not in str(posted["json"])
     assert "shot_evidence" in posted["json"]["input"][0]["content"][0]["text"]
+
+
+def test_decompose_video_structure_with_ai_accepts_numeric_segment_ids(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-secret-key")
+
+    _install_fake_structure_response(
+        monkeypatch,
+        {
+            "output_text": (
+                '{"source":"ai","headline":"痛点种草型结构","segments":[{"id":1,"label":"痛点开场",'
+                '"type":"开场","start":0.0,"end":3.0,"shot_indices":[1],"purpose":"吸引停留",'
+                '"method":"痛点提问","evidence":"第1镜头出现痛点字幕","rhythm":"快进入",'
+                '"packaging":"大标题","required_asset":"开头近景","transferable_rule":"先抛问题",'
+                '"non_transferable":"不要照搬商品名","confidence":0.88}],'
+                '"rhythm_structure":{"summary":"前段快进入"},'
+                '"packaging_structure":{"caption_density":"高"},'
+                '"confidence":0.83,"warnings":[]}'
+            )
+        },
+    )
+
+    from app.video_understanding.ai_structure_service import decompose_video_structure_with_ai
+
+    analysis = decompose_video_structure_with_ai(
+        title="护肤样例",
+        signal=_sample_signal(),
+        evidence=_sample_shot_evidence(),
+        transcript_summary="开头提出痛点。中段展示效果。结尾引导下单。",
+    )
+
+    assert analysis.segments[0].id == "1"
 
 
 def test_decompose_video_structure_with_ai_uses_openai_base_url(monkeypatch):
